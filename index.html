@@ -108,12 +108,10 @@
     background:rgba(8,22,27,.95);border:1px solid var(--gold-dim);
     padding:20px 22px 22px;animation:popfade 2.7s ease forwards;
   }
-  .popup.bad{border-color:var(--red);}
   .popup .kicker{
     font-family:var(--mono);font-size:9px;letter-spacing:.38em;text-transform:uppercase;
     color:var(--gold);margin:0 0 9px;
   }
-  .popup.bad .kicker{color:var(--red);}
   .popup .song{
     font-family:var(--display);font-weight:900;
     font-size:clamp(21px,4.4vw,38px);line-height:1;letter-spacing:-.02em;
@@ -321,8 +319,8 @@ function refresh(){
 function popup(w){
   clearPopup();
   const d=document.createElement("div");
-  d.className="popup"+(w.over?" bad":"");
-  d.innerHTML=`<p class="kicker">${w.over?"Beck gets in":"Into the coda"}</p>
+  d.className="popup";
+  d.innerHTML=`<p class="kicker">Into the coda</p>
     <p class="song">${w.title}</p><p class="by">${w.artist}</p>`;
   wrap.appendChild(d);
   d.addEventListener("animationend",()=>d.remove());
@@ -358,8 +356,8 @@ function land(i){
   spinning=false;
   won.push({title:w.title,artist:w.artist,over:w.over});
   statusEl.textContent=(w.over?"Loser by Beck. That's the last one in. ":"Into the coda: ")+w.title+" by "+w.artist;
-  if(w.over){refresh();return setTimeout(gameOver,700);}
   popup(w);
+  if(w.over){refresh();return setTimeout(gameOver,2700);}
   w.consumed=true;
   pendingFlip=w;
   draw();refresh();
