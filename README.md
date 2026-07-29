@@ -32,6 +32,38 @@ self-contained file with no build step and no dependencies.
    set. (Sweep every other song in first and you get a full coda with no Beck.)
 6. To start a fresh set, wait out the lock and **hold** the button to reset.
 
+## Customizing the wheel
+
+Press the **gear icon** in the top-right to open Settings, where you can change:
+
+- **Initial losers** — how many Beck / "Loser" wedges the wheel starts with.
+- **Songs on the wheel** — one per line as `Title | Artist` (artist optional).
+- **Lock restart after the set ends** — on by default. Protects against an
+  immediate re-roll: once Beck closes the set, the restart button stays locked
+  through a short countdown before you can hold it. Turn it off to allow
+  restarting straight away.
+
+Applying starts a fresh set, and your choices are saved in the browser
+(`localStorage`) so they stick between sessions.
+
+Repo-wide defaults live in **`config.json`** next to `index.html`:
+
+```json
+{
+  "losers": 4,
+  "lockRestart": true,
+  "songs": [
+    { "title": "Hey Jude", "artist": "The Beatles" }
+  ]
+}
+```
+
+Edit that file to change the defaults everyone gets. It's fetched at load time
+when the page is served over HTTP (GitHub Pages, a local server, etc.). If the
+file can't be fetched — for example when opening `index.html` straight off disk
+via `file://` — the app falls back to the defaults baked into the page, so it
+always works.
+
 ## Publishing on GitHub Pages
 
 This repo is set up to serve straight from the root of the default branch:

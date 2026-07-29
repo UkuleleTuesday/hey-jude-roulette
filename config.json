@@ -1,0 +1,28 @@
+{
+  "losers": 4,
+  "lockRestart": true,
+  "songs": [
+    { "title": "Hey Jude", "artist": "The Beatles" },
+    { "title": "One Day Like This", "artist": "Elbow" },
+    { "title": "Royals", "artist": "Lorde" },
+    { "title": "My Shot", "artist": "Hamilton" },
+    { "title": "Sympathy For The Devil", "artist": "The Rolling Stones" },
+    { "title": "Fortunate Son", "artist": "Creedence Clearwater Revival" },
+    { "title": "Born This Way", "artist": "Lady Gaga" },
+    { "title": "19-2000", "artist": "Gorillaz" },
+    { "title": "Bootylicious", "artist": "Destiny's Child" },
+    { "title": "Freedom! 90", "artist": "George Michael" },
+    { "title": "Take Your Mama", "artist": "Scissor Sisters" },
+    { "title": "The Look", "artist": "Roxette" },
+    { "title": "Sweet Child of Mine", "artist": "Guns N' Roses" },
+    { "title": "Macarena", "artist": "Los del Río" },
+    { "title": "Paradise City", "artist": "Guns N' Roses" },
+    { "title": "All Right Now", "artist": "Free" },
+    { "title": "Psycho Killer", "artist": "Talking Heads" },
+    { "title": "Jurassic Park Theme", "artist": "John Williams" },
+    { "title": "Shake It Off", "artist": "Taylor Swift" },
+    { "title": "Gangsta's Paradise", "artist": "Coolio" },
+    { "title": "Mr Brightside", "artist": "The Killers" },
+    { "title": "Chaise Longue", "artist": "Wet Leg" }
+  ]
+}
