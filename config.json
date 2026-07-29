@@ -1,5 +1,6 @@
 {
   "losers": 4,
+  "lockRestart": true,
   "songs": [
     { "title": "Hey Jude", "artist": "The Beatles" },
     { "title": "One Day Like This", "artist": "Elbow" },

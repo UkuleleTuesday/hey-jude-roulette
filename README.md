@@ -38,6 +38,10 @@ Press the **gear icon** in the top-right to open Settings, where you can change:
 
 - **Initial losers** — how many Beck / "Loser" wedges the wheel starts with.
 - **Songs on the wheel** — one per line as `Title | Artist` (artist optional).
+- **Lock restart after the set ends** — on by default. Protects against an
+  immediate re-roll: once Beck closes the set, the restart button stays locked
+  through a short countdown before you can hold it. Turn it off to allow
+  restarting straight away.
 
 Applying starts a fresh set, and your choices are saved in the browser
 (`localStorage`) so they stick between sessions.
@@ -47,6 +51,7 @@ Repo-wide defaults live in **`config.json`** next to `index.html`:
 ```json
 {
   "losers": 4,
+  "lockRestart": true,
   "songs": [
     { "title": "Hey Jude", "artist": "The Beatles" }
   ]

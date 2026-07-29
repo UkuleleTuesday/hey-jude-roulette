@@ -237,6 +237,12 @@
   .settings input[type=number]{width:120px;}
   .settings textarea{min-height:200px;resize:vertical;line-height:1.5;}
   .settings input:focus,.settings textarea:focus{outline:none;border-color:var(--gold);}
+  .check-row{
+    display:flex;align-items:center;gap:10px;cursor:pointer;
+    font-family:var(--body);font-size:14px;letter-spacing:normal;
+    text-transform:none;color:var(--cream);margin:0;
+  }
+  .check-row input[type=checkbox]{width:17px;height:17px;accent-color:var(--gold);cursor:pointer;margin:0;}
   .field .help{font-size:11px;color:var(--muted);margin:6px 0 0;line-height:1.4;}
   .field .err{font-size:11px;color:var(--red);margin:6px 0 0;min-height:1em;}
   .settings-actions{
@@ -317,6 +323,14 @@
     </div>
 
     <div class="field">
+      <label class="check-row" for="lockRestart">
+        <input type="checkbox" id="lockRestart">
+        <span>Lock restart after the set ends</span>
+      </label>
+      <p class="help">Protect against an immediate re-roll: once Beck closes the set, hold the restart until the lock counts down. Turn off to allow restarting straight away.</p>
+    </div>
+
+    <div class="field">
       <label for="songList">Songs on the wheel</label>
       <textarea id="songList" spellcheck="false" placeholder="Title | Artist"></textarea>
       <p class="help">One song per line, as <b>Title | Artist</b>. The artist is optional.</p>
@@ -338,6 +352,7 @@
 // (e.g. opening index.html straight off disk with no server).
 const FALLBACK = {
   losers:4,
+  lockRestart:true,
   songs:[
     ["Hey Jude","The Beatles"],["One Day Like This","Elbow"],["Royals","Lorde"],
     ["My Shot","Hamilton"],["Sympathy For The Devil","The Rolling Stones"],["Fortunate Son","Creedence Clearwater Revival"],
@@ -351,9 +366,9 @@ const FALLBACK = {
 };
 
 // Defaults, seeded from FALLBACK and overlaid by config.json when available.
-let CONFIG = {losers:FALLBACK.losers, songs:FALLBACK.songs.slice()};
+let CONFIG = {losers:FALLBACK.losers, lockRestart:FALLBACK.lockRestart, songs:FALLBACK.songs.slice()};
 // Active settings (defaults, or the user's saved customizations).
-let settings = {losers:CONFIG.losers, songs:CONFIG.songs.slice()};
+let settings = {losers:CONFIG.losers, lockRestart:CONFIG.lockRestart, songs:CONFIG.songs.slice()};
 
 const MAX_LOSERS=50;
 function clampLosers(n){n=Math.round(Number(n));if(!Number.isFinite(n))return CONFIG.losers;return Math.max(0,Math.min(MAX_LOSERS,n));}
@@ -379,6 +394,7 @@ async function loadConfig(){
       const songs=normSongs(j.songs);
       if(songs)CONFIG.songs=songs;
       if(j.losers!=null&&Number.isFinite(Number(j.losers)))CONFIG.losers=clampLosers(j.losers);
+      if(typeof j.lockRestart==="boolean")CONFIG.lockRestart=j.lockRestart;
     }
   }catch(e){/* offline / file:// — fall back to embedded defaults */}
 }
@@ -391,12 +407,13 @@ function loadSettings(){
       const songs=normSongs(j.songs);
       settings={
         losers:j.losers!=null?clampLosers(j.losers):CONFIG.losers,
+        lockRestart:typeof j.lockRestart==="boolean"?j.lockRestart:CONFIG.lockRestart,
         songs:songs||CONFIG.songs.slice()
       };
       return;
     }
   }catch(e){}
-  settings={losers:CONFIG.losers, songs:CONFIG.songs.slice()};
+  settings={losers:CONFIG.losers, lockRestart:CONFIG.lockRestart, songs:CONFIG.songs.slice()};
 }
 function saveSettings(){
   try{localStorage.setItem("roulette:settings",JSON.stringify(settings));}catch(e){}
@@ -531,7 +548,7 @@ function armRestart(){
         lab=btn.querySelector(".lab"),fill=btn.querySelector(".fill"),
         hint=document.getElementById("hint");
   box.hidden=false;btn.dataset.locked="1";
-  let unlockAt=Date.now()+LOCK_MS, holdStart=null, raf;
+  let unlockAt=Date.now()+(settings.lockRestart?LOCK_MS:0), holdStart=null, raf;
 
   function frame(){
     const now=Date.now();
@@ -620,6 +637,7 @@ spinBtn.addEventListener("click",spin);
 const dlg=document.getElementById("settings");
 const gear=document.getElementById("gear");
 const loserInput=document.getElementById("loserCount");
+const lockInput=document.getElementById("lockRestart");
 const songInput=document.getElementById("songList");
 const songErr=document.getElementById("songErr");
 
@@ -639,6 +657,7 @@ function textToSongs(text){
 }
 function fillForm(src){
   loserInput.value=src.losers;
+  lockInput.checked=src.lockRestart!==false;
   songInput.value=songsToText(src.songs);
   songErr.textContent="";
 }
@@ -655,7 +674,7 @@ function closeSettings(){
 gear.addEventListener("click",openSettings);
 document.getElementById("cancelSettings").addEventListener("click",closeSettings);
 document.getElementById("resetDefaults").addEventListener("click",()=>{
-  fillForm({losers:CONFIG.losers,songs:CONFIG.songs});
+  fillForm({losers:CONFIG.losers,lockRestart:CONFIG.lockRestart,songs:CONFIG.songs});
 });
 document.getElementById("settingsForm").addEventListener("submit",e=>{
   e.preventDefault();
@@ -664,7 +683,7 @@ document.getElementById("settingsForm").addEventListener("submit",e=>{
     songErr.textContent="Add at least one song.";
     return;
   }
-  settings={losers:clampLosers(loserInput.value),songs};
+  settings={losers:clampLosers(loserInput.value),lockRestart:lockInput.checked,songs};
   saveSettings();
   closeSettings();
   reset();
