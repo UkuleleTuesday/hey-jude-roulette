@@ -37,7 +37,7 @@ self-contained file with no build step and no dependencies.
 Press the **gear icon** in the top-right to open Settings, where you can change:
 
 - **Initial losers** — how many Beck / "Loser" wedges the wheel starts with.
-- **Songs on the wheel** — one per line as `Title | Artist` (artist optional).
+- **Songs on the wheel** — one per line as `Title - Artist` (artist optional).
 - **Lock restart after the set ends** — on by default. Protects against an
   immediate re-roll: once Beck closes the set, the restart button stays locked
   through a short countdown before you can hold it. Turn it off to allow

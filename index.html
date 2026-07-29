@@ -332,8 +332,8 @@
 
     <div class="field">
       <label for="songList">Songs on the wheel</label>
-      <textarea id="songList" spellcheck="false" placeholder="Title | Artist"></textarea>
-      <p class="help">One song per line, as <b>Title | Artist</b>. The artist is optional.</p>
+      <textarea id="songList" spellcheck="false" placeholder="Title - Artist"></textarea>
+      <p class="help">One song per line, as <b>Title - Artist</b> (with spaces around the dash). The artist is optional.</p>
       <p class="err" id="songErr"></p>
     </div>
 
@@ -642,15 +642,18 @@ const songInput=document.getElementById("songList");
 const songErr=document.getElementById("songErr");
 
 function songsToText(songs){
-  return songs.map(s=>s.artist?`${s.title} | ${s.artist}`:s.title).join("\n");
+  return songs.map(s=>s.artist?`${s.title} - ${s.artist}`:s.title).join("\n");
 }
 function textToSongs(text){
   const out=[];
   for(const raw of text.split("\n")){
     const line=raw.trim();
     if(!line)continue;
-    const i=line.indexOf("|");
-    if(i>=0)out.push({title:line.slice(0,i).trim(),artist:line.slice(i+1).trim()});
+    // Split on " - " (or " | ") so hyphenated titles like "19-2000" stay intact.
+    let i=line.indexOf(" - ");
+    let sep=3;
+    if(i<0){i=line.indexOf(" | ");sep=3;}
+    if(i>=0)out.push({title:line.slice(0,i).trim(),artist:line.slice(i+sep).trim()});
     else out.push({title:line,artist:""});
   }
   return out.filter(s=>s.title);
