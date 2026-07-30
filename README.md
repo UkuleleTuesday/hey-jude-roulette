@@ -30,7 +30,8 @@ self-contained file with no build step and no dependencies.
    song raises the share of Loser wedges.
 5. When the wheel hits **Loser / Beck**, that's the finale — Beck closes the
    set. (Sweep every other song in first and you get a full coda with no Beck.)
-6. To start a fresh set, wait out the lock and **hold** the button to reset.
+6. To start a fresh set, wait out the lock and **hold** the hub — the same
+   middle button turns into the play-again control once the set is over.
 
 ## Customizing the wheel
 
@@ -39,7 +40,7 @@ Press the **gear icon** in the top-right to open Settings, where you can change:
 - **Initial losers** — how many Beck / "Loser" wedges the wheel starts with.
 - **Songs on the wheel** — one per line as `Title - Artist` (artist optional).
 - **Lock restart after the set ends** — on by default. Protects against an
-  immediate re-roll: once Beck closes the set, the restart button stays locked
+  immediate re-roll: once Beck closes the set, the hub stays locked
   through a short countdown before you can hold it. Turn it off to allow
   restarting straight away.
 
