@@ -89,18 +89,33 @@
 
   .hub{
     position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-    width:23.5%;aspect-ratio:1;border-radius:50%;padding:0;
+    width:23.5%;aspect-ratio:1;border-radius:50%;padding:0;overflow:hidden;
     display:flex;align-items:center;justify-content:center;
     background:var(--gold);color:var(--ink);
     border:1px solid rgba(8,22,27,.35);cursor:pointer;
     font-family:var(--display);font-weight:900;
     font-size:clamp(13px,2.3vw,19px);letter-spacing:.06em;text-transform:uppercase;
     transition:background .18s ease,transform .18s ease;z-index:4;
+    touch-action:none;user-select:none;-webkit-user-select:none;
   }
-  .hub:hover:not(:disabled){background:#f3c463;}
-  .hub:active:not(:disabled){transform:translate(-50%,-50%) scale(.965);}
+  .hub[data-mode=spin]:hover:not(:disabled){background:#f3c463;}
+  .hub:active:not(:disabled):not([data-mode=locked]){transform:translate(-50%,-50%) scale(.965);}
   .hub:disabled{background:#3b5560;color:rgba(243,234,222,.4);cursor:default;}
   .hub:focus-visible{outline:2px solid var(--cream);outline-offset:5px;}
+  .hub .lab{position:relative;z-index:1;padding:0 10%;text-align:center;
+    line-height:1.12;white-space:pre-line;}
+  .hub .fill{position:absolute;inset:0;border-radius:50%;z-index:0;opacity:0;}
+
+  /* After the set ends the hub itself becomes the hold-to-play-again control. */
+  .hub[data-mode=locked],.hub[data-mode=again]{
+    background:#3b5560;border-color:rgba(233,180,76,.4);
+    font-size:clamp(9px,1.5vw,13px);letter-spacing:.03em;
+  }
+  .hub[data-mode=locked]{color:rgba(243,234,222,.4);cursor:default;}
+  .hub[data-mode=again]{color:var(--cream);}
+  .hub[data-mode=locked] .fill,.hub[data-mode=again] .fill{opacity:1;}
+  .hub[data-mode=locked] .fill{background:conic-gradient(rgba(243,234,222,.09) calc(var(--p,0) * 1%),transparent 0);}
+  .hub[data-mode=again] .fill{background:conic-gradient(var(--gold-dim) calc(var(--p,0) * 1%),transparent 0);}
 
   .popup{
     position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
@@ -179,22 +194,10 @@
     font-family:var(--mono);font-size:clamp(9px,1.1vh,11px);letter-spacing:.2em;
     text-transform:uppercase;color:var(--gold-dim);margin:8px 0 0;
   }
-  .restart{flex:0 0 auto;margin-top:clamp(8px,1.4vh,14px);}
-  .again{
-    position:relative;overflow:hidden;display:block;width:100%;
-    font-family:var(--display);font-weight:900;font-size:clamp(12px,1.6vh,15px);
-    text-transform:uppercase;letter-spacing:.08em;background:transparent;
-    border:1px solid var(--gold-dim);padding:clamp(10px,1.8vh,16px) 22px;
-    cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;
-  }
-  .again[data-locked="1"]{border-color:rgba(243,234,222,.14);cursor:default;}
-  .again .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--gold);}
-  .again .lab{position:relative;z-index:1;color:var(--cream);}
-  .again[data-locked="1"] .lab{color:rgba(243,234,222,.3);}
-  .again:focus-visible{outline:2px solid var(--cream);outline-offset:3px;}
   .hint{
+    flex:0 0 auto;
     font-family:var(--mono);font-size:clamp(8px,1.1vh,10px);letter-spacing:.2em;
-    text-transform:uppercase;color:rgba(243,234,222,.28);margin:8px 0 0;text-align:center;
+    text-transform:uppercase;color:rgba(243,234,222,.28);margin:0;text-align:center;
   }
   [hidden]{display:none !important;}
   .status{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);}
@@ -287,8 +290,9 @@
           <circle cx="300" cy="300" r="86" fill="#0d242c" stroke="#a67c2c" stroke-width="1"/>
           <polygon points="300,54 288,20 312,20" fill="#e9b44c" stroke="#08161b" stroke-width="1.5"/>
         </svg>
-        <button class="hub" id="spin">Spin</button>
+        <button class="hub" id="spin" data-mode="spin"><span class="fill" aria-hidden="true"></span><span class="lab">Spin</span></button>
       </div>
+      <p class="hint" id="hint" hidden></p>
       <p class="status" id="status" role="status" aria-live="polite"></p>
     </section>
 
@@ -303,10 +307,6 @@
       <ol class="setlist" id="setlist"></ol>
       <p class="empty" id="empty">Nothing yet. Spin to start.</p>
       <div class="tally"><span id="left">22 songs left</span><span id="odds">Loser: 4/26</span></div>
-      <div class="restart" id="restart" hidden>
-        <button class="again" id="again" data-locked="1"><span class="fill"></span><span class="lab">Locked</span></button>
-        <p class="hint" id="hint"></p>
-      </div>
     </aside>
   </div>
 </div>
@@ -327,7 +327,7 @@
         <input type="checkbox" id="lockRestart">
         <span>Lock restart after the set ends</span>
       </label>
-      <p class="help">Protect against an immediate re-roll: once Beck closes the set, hold the restart until the lock counts down. Turn off to allow restarting straight away.</p>
+      <p class="help">Protect against an immediate re-roll: once Beck closes the set, the hub in the middle of the wheel turns into the play-again button and stays locked until the countdown runs out. Turn off to allow restarting straight away.</p>
     </div>
 
     <div class="field">
@@ -430,7 +430,12 @@ let wedges, rotation=0, spinning=false, won=[], best=null, pendingFlip=null;
 const wheel=document.getElementById("wheel");
 const wrap=document.getElementById("wrap");
 const spinBtn=document.getElementById("spin");
+const spinLab=spinBtn.querySelector(".lab");
+const spinFill=spinBtn.querySelector(".fill");
 const statusEl=document.getElementById("status");
+
+function hubLabel(t){spinLab.textContent=t;}
+function hubFill(pct){spinFill.style.setProperty("--p",pct);}
 
 function el(n,a){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;}
 function pt(a,r){const t=(a-90)*Math.PI/180;return[300+r*Math.cos(t),300+r*Math.sin(t)];}
@@ -465,6 +470,11 @@ function draw(){
   });
 }
 
+// Timers belonging to the current set, so a restart can't leave one pending.
+let timers=[];
+function later(fn,ms){const id=setTimeout(fn,ms);timers.push(id);return id;}
+function clearTimers(){timers.forEach(clearTimeout);timers=[];}
+
 function songsLeft(){return wedges.filter(w=>!w.over&&!w.consumed).length;}
 
 function refresh(){
@@ -494,12 +504,13 @@ function clearPopup(){wrap.querySelectorAll(".popup").forEach(p=>p.remove());}
 
 function spin(){
   if(spinning||!wedges.length)return;
-  spinning=true;spinBtn.disabled=true;spinBtn.textContent="…";
+  if(spinBtn.dataset.mode!=="spin")return; // hub is the play-again control now
+  spinning=true;spinBtn.disabled=true;hubLabel("…");
   clearPopup();
   if(pendingFlip){
     toLoser(pendingFlip);pendingFlip=null;
     draw();refresh();
-    return setTimeout(launch,650);
+    return later(launch,650);
   }
   launch();
 }
@@ -513,7 +524,7 @@ function launch(){
   rotation+=delta;
   wheel.style.transform=`rotate(${rotation}deg)`;
   const wait=matchMedia("(prefers-reduced-motion: reduce)").matches?1150:4650;
-  setTimeout(()=>land(i),wait);
+  later(()=>land(i),wait);
 }
 
 function land(i){
@@ -522,12 +533,12 @@ function land(i){
   won.push({title:w.title,artist:w.artist,over:w.over});
   statusEl.textContent=(w.over?"Loser by Beck. That's the last one in. ":"Into the coda: ")+w.title+" by "+w.artist;
   popup(w);
-  if(w.over){refresh();return setTimeout(gameOver,2700);}
+  if(w.over){refresh();return later(gameOver,2700);}
   w.consumed=true;
   pendingFlip=w;
   draw();refresh();
-  if(!songsLeft())return setTimeout(clearSweep,900);
-  spinBtn.disabled=false;spinBtn.textContent="Spin again";
+  if(!songsLeft())return later(clearSweep,900);
+  spinBtn.disabled=false;hubLabel("Spin");
 }
 
 async function saveBest(){
@@ -542,30 +553,34 @@ async function loadBest(){
 }
 
 const LOCK_MS=10000, HOLD_MS=2500;
+// Tears down the armed play-again loop, so a restart from anywhere (a finished
+// hold, or Apply & restart in settings) hands the hub back to spinning.
+let restartTeardown=null;
 
+// The hub in the middle of the wheel doubles as the play-again control once
+// the set is over: same button, hold-to-confirm instead of click-to-spin.
 function armRestart(){
-  const box=document.getElementById("restart"),btn=document.getElementById("again"),
-        lab=btn.querySelector(".lab"),fill=btn.querySelector(".fill"),
-        hint=document.getElementById("hint");
-  box.hidden=false;btn.dataset.locked="1";
+  const btn=spinBtn, hint=document.getElementById("hint");
+  if(restartTeardown)restartTeardown();
+  hint.hidden=false;
+  btn.disabled=false;btn.dataset.mode="locked";
   let unlockAt=Date.now()+(settings.lockRestart?LOCK_MS:0), holdStart=null, raf;
 
   function frame(){
     const now=Date.now();
     if(now<unlockAt){
-      lab.textContent="Locked "+Math.ceil((unlockAt-now)/1000);
-      fill.style.background="rgba(243,234,222,.07)";
-      fill.style.width=(100-(unlockAt-now)/LOCK_MS*100)+"%";
+      btn.dataset.mode="locked";
+      hubLabel("Locked\n"+Math.ceil((unlockAt-now)/1000));
+      hubFill(100-(unlockAt-now)/LOCK_MS*100);
       hint.textContent="No re-rolls. Beck stands.";
     }else if(holdStart){
       const q=Math.min(1,(now-holdStart)/HOLD_MS);
-      fill.style.background="var(--gold)";
-      fill.style.width=(q*100)+"%";
-      lab.textContent=q<1?"Keep holding":"Go";
-      if(q>=1){cancelAnimationFrame(raf);teardown();reset();return;}
+      hubFill(q*100);
+      hubLabel(q<1?"Keep\nholding":"Go");
+      if(q>=1){teardown();reset();return;}
     }else{
-      btn.dataset.locked="0";fill.style.width="0%";
-      lab.textContent="Hold to play again";
+      btn.dataset.mode="again";hubFill(0);
+      hubLabel("Hold\nto play\nagain");
       hint.textContent="Press and hold 2.5s";
     }
     raf=requestAnimationFrame(frame);
@@ -575,10 +590,11 @@ function armRestart(){
   const down=e=>{e.preventDefault();if(Date.now()>=unlockAt&&!holdStart)holdStart=Date.now();};
   const up=()=>{holdStart=null;};
   function teardown(){
-    cancelAnimationFrame(raf);box.hidden=true;
+    cancelAnimationFrame(raf);hint.hidden=true;hubFill(0);
     btn.removeEventListener("pointerdown",down);btn.removeEventListener("pointerup",up);
     btn.removeEventListener("pointerleave",up);btn.removeEventListener("pointercancel",up);
     btn.removeEventListener("keydown",kd);btn.removeEventListener("keyup",up);
+    restartTeardown=null;
   }
   const kd=e=>{if(e.key===" "||e.key==="Enter")down(e);};
   btn.addEventListener("pointerdown",down);
@@ -587,6 +603,7 @@ function armRestart(){
   btn.addEventListener("pointercancel",up);
   btn.addEventListener("keydown",kd);
   btn.addEventListener("keyup",up);
+  restartTeardown=teardown;
 }
 
 function finish(title,sub,winning){
@@ -599,7 +616,6 @@ function finish(title,sub,winning){
     best!==null?"Longest coda: "+best+" song"+(best===1?"":"s"):"";
   document.getElementById("codaHead").hidden=true;
   document.querySelector(".lede").hidden=true;
-  spinBtn.disabled=true;spinBtn.textContent="Done";
   armRestart();
 }
 
@@ -611,9 +627,11 @@ function clearSweep(){
 }
 
 function reset(){
+  if(restartTeardown)restartTeardown();
+  clearTimers();spinning=false;
   pendingFlip=null;clearPopup();
   document.getElementById("verdict").hidden=true;
-  document.getElementById("restart").hidden=true;
+  document.getElementById("hint").hidden=true;
   document.getElementById("codaHead").hidden=false;
   document.querySelector(".lede").hidden=false;
   loserSeq=0;
@@ -627,11 +645,21 @@ function reset(){
   wheel.style.transition="none";wheel.style.transform="rotate(0deg)";
   requestAnimationFrame(()=>{wheel.style.transition="";});
   draw();refresh();
-  spinBtn.disabled=false;spinBtn.textContent="Spin";
+  spinBtn.disabled=false;spinBtn.dataset.mode="spin";hubFill(0);hubLabel("Spin");
   statusEl.textContent="";
 }
 
-spinBtn.addEventListener("click",spin);
+// A press that finishes the play-again hold still ends in a click on the hub —
+// only spin when the press that produced the click began in spin mode.
+let pressMode="spin";
+spinBtn.addEventListener("pointerdown",()=>{pressMode=spinBtn.dataset.mode;});
+spinBtn.addEventListener("keydown",e=>{
+  if(e.key===" "||e.key==="Enter")pressMode=spinBtn.dataset.mode;
+});
+spinBtn.addEventListener("click",()=>{
+  const started=pressMode;pressMode=spinBtn.dataset.mode;
+  if(started==="spin")spin();
+});
 
 /* ---- Settings dialog ---- */
 const dlg=document.getElementById("settings");
