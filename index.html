@@ -136,10 +136,6 @@
     background:rgba(8,22,27,.95);border:1px solid var(--gold-dim);
     padding:20px 22px 22px;animation:popfade 2.7s ease forwards;
   }
-  .popup .kicker{
-    font-family:var(--mono);font-size:9px;letter-spacing:.38em;text-transform:uppercase;
-    color:var(--gold);margin:0 0 9px;
-  }
   .popup .song{
     font-family:var(--display);font-weight:900;
     font-size:clamp(21px,4.4vw,38px);line-height:1;letter-spacing:-.02em;
@@ -194,14 +190,6 @@
     margin:0;color:var(--red);
   }
   .verdict-block.win .verdict{color:var(--gold);}
-  .verdict-sub{
-    font-size:clamp(11px,1.4vh,14px);color:var(--muted);
-    margin:6px 0 0;line-height:1.4;
-  }
-  .best{
-    font-family:var(--mono);font-size:clamp(9px,1.1vh,11px);letter-spacing:.2em;
-    text-transform:uppercase;color:var(--gold-dim);margin:8px 0 0;
-  }
   .hint{
     flex:0 0 auto;
     font-family:var(--mono);font-size:clamp(8px,1.1vh,10px);letter-spacing:.2em;
@@ -234,7 +222,6 @@
     font-family:var(--display);font-weight:900;text-transform:uppercase;
     font-size:clamp(18px,3vh,26px);letter-spacing:-.02em;margin:0 0 4px;color:var(--cream);
   }
-  .settings .sub{font-size:12px;color:var(--muted);margin:0 0 18px;line-height:1.4;}
   .settings label{
     display:block;font-family:var(--mono);font-size:10px;letter-spacing:.28em;
     text-transform:uppercase;color:var(--gold-dim);margin:0 0 6px;
@@ -254,7 +241,6 @@
     text-transform:none;color:var(--cream);margin:0;
   }
   .check-row input[type=checkbox]{width:17px;height:17px;accent-color:var(--gold);cursor:pointer;margin:0;}
-  .field .help{font-size:11px;color:var(--muted);margin:6px 0 0;line-height:1.4;}
   .field .err{font-size:11px;color:var(--red);margin:6px 0 0;min-height:1em;}
   .settings-actions{
     display:flex;gap:10px;justify-content:space-between;align-items:center;
@@ -306,8 +292,6 @@
     <aside class="panel">
       <div class="verdict-block" id="verdict" hidden>
         <h2 class="verdict" id="verdictTitle"></h2>
-        <p class="verdict-sub" id="verdictSub"></p>
-        <p class="best" id="bestLine"></p>
       </div>
       <ol class="setlist" id="setlist"></ol>
       <div class="tally"><span id="left">22 songs left</span><span id="odds">Loser: 4/26</span></div>
@@ -318,12 +302,10 @@
 <dialog class="settings" id="settings" aria-label="Roulette settings">
   <form method="dialog" class="settings-body" id="settingsForm">
     <h2>Settings</h2>
-    <p class="sub">Set up the wheel for your set. Changes start a fresh run.</p>
 
     <div class="field">
       <label for="loserCount">Initial losers (Beck wedges)</label>
       <input type="number" id="loserCount" min="0" max="50" step="1" inputmode="numeric">
-      <p class="help">How many Beck / “Loser” wedges the wheel starts with. Landing one ends the set.</p>
     </div>
 
     <div class="field">
@@ -331,13 +313,11 @@
         <input type="checkbox" id="lockRestart">
         <span>Lock restart after the set ends</span>
       </label>
-      <p class="help">Protect against an immediate re-roll: once Beck closes the set, the hub locks out for a short countdown. After that the next spin starts a fresh set. Turn off to allow spinning again straight away.</p>
     </div>
 
     <div class="field">
       <label for="songList">Songs on the wheel</label>
       <textarea id="songList" spellcheck="false" placeholder="Title - Artist"></textarea>
-      <p class="help">One song per line, as <b>Title - Artist</b> (with spaces around the dash). The artist is optional.</p>
       <p class="err" id="songErr"></p>
     </div>
 
@@ -433,7 +413,7 @@ const R=282, INNER=88;
 // which is the whole hint that the wheel is draggable — and because they turn
 // with it, the rotation stays readable once the wedge labels blur.
 const GRIP_TEETH=72, GRIP_R0=286.5, GRIP_R1=294.5;
-let wedges, rotation=0, spinning=false, won=[], best=null, pendingFlip=null;
+let wedges, rotation=0, spinning=false, won=[], pendingFlip=null;
 
 const wheel=document.getElementById("wheel");
 const wrap=document.getElementById("wrap");
@@ -515,8 +495,7 @@ function popup(w){
   clearPopup();
   const d=document.createElement("div");
   d.className="popup";
-  d.innerHTML=`<p class="kicker">Into the coda</p>
-    <p class="song">${w.title}</p><p class="by">${w.artist}</p>`;
+  d.innerHTML=`<p class="song">${w.title}</p><p class="by">${w.artist}</p>`;
   wrap.appendChild(d);
   d.addEventListener("animationend",()=>d.remove());
 }
@@ -794,17 +773,6 @@ function land(i){
   setMode("spin");hubLabel("Spin");
 }
 
-async function saveBest(){
-  if(best!==null&&won.length<=best)return;
-  best=won.length;
-  try{await window.storage.set("roulette:best",String(best));}catch(e){}
-  try{localStorage.setItem("roulette:best",String(best));}catch(e){}
-}
-async function loadBest(){
-  try{const r=await window.storage.get("roulette:best");if(r){best=parseInt(r.value,10);return;}}catch(e){}
-  try{const v=localStorage.getItem("roulette:best");if(v)best=parseInt(v,10);}catch(e){}
-}
-
 const LOCK_MS=10000;
 // Tears down the countdown, so a restart from anywhere (the next spin, or
 // Apply & restart in settings) hands the hub back to spinning.
@@ -841,23 +809,19 @@ function armRestart(){
   };
 }
 
-function finish(title,sub,winning){
-  saveBest();
+function finish(title,winning){
   setOver=true;
   const vb=document.getElementById("verdict");
   vb.hidden=false;vb.classList.toggle("win",!!winning);
   document.getElementById("verdictTitle").textContent=title;
-  document.getElementById("verdictSub").textContent=sub;
-  document.getElementById("bestLine").textContent=
-    best!==null?"Longest coda: "+best+" song"+(best===1?"":"s"):"";
   armRestart();
 }
 
 function gameOver(){
-  finish("Loser","Beck gets the last word — and a place in the coda.",false);
+  finish("Loser",false);
 }
 function clearSweep(){
-  finish("Full coda","Every song mashed in, no Beck. Nobody does this.",true);
+  finish("Full coda",true);
 }
 
 function reset(){
@@ -1018,7 +982,6 @@ document.getElementById("settingsForm").addEventListener("submit",e=>{
 
 /* ---- Boot ---- */
 (async function init(){
-  loadBest();
   await loadConfig();
   loadSettings();
   reset();
