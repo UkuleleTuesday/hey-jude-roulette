@@ -35,6 +35,9 @@ async function newPage(opts = {}) {
   page.on('pageerror', e => errs.push(String(e)));
   page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errs.push('console: ' + m.text()); });
   await page.addInitScript(PROBE);
+  // These suites are about the gestures, not the first-visit nudge — arriving as
+  // a player who has already flicked keeps the wheel still until they act.
+  await page.addInitScript(() => localStorage.setItem('roulette:flicked', '1'));
   await page.addInitScript(st => localStorage.setItem('roulette:settings', JSON.stringify(st)), opts.settings || NOLOSE);
   await page.goto(URL);
   await page.waitForFunction(() => document.querySelectorAll('#wheel path').length > 0);

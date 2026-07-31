@@ -35,6 +35,9 @@ async function newPage(opts = {}) {
   page.on('pageerror', e => errs.push(String(e)));
   page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errs.push('console: ' + m.text()); });
   await page.addInitScript(PROBE);
+  // These suites are about the gestures, not the first-visit nudge — arriving as
+  // a player who has already flicked keeps the wheel still until they act.
+  await page.addInitScript(() => localStorage.setItem('roulette:flicked', '1'));
   if (opts.settings) await page.addInitScript(
     st => localStorage.setItem('roulette:settings', JSON.stringify(st)), opts.settings);
   await page.goto(URL);
@@ -85,7 +88,12 @@ const settle = (p, t = 15000) =>
   ok(full.delta > mid.delta && mid.delta > tap.delta,
      `revolutions scale with charge (${[tap, mid, full].map(x => (x.delta / 360).toFixed(1)).join(' -> ')} turns)`);
 
-  const speed = x => x.delta / x.ms * 1000;
+  // Whole turns only. `delta` also carries the random 0-360deg the wheel travels
+  // to line the winner up under the pointer, which is a third of a tap's total
+  // distance but a twelfth of a full charge's — comparing raw degrees per second
+  // measures that lottery as much as the charge. floor(delta/360) is the turn
+  // count exactly, so this compares like with like.
+  const speed = x => Math.floor(x.delta / 360) * 360 / x.ms * 1000;
   ok(speed(full) > speed(tap) * 1.25,
      `full charge is faster, not just longer (${speed(tap) | 0} -> ${speed(full) | 0} deg/s)`);
 

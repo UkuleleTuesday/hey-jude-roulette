@@ -119,7 +119,10 @@ itself still ships with nothing.
   the strength of the gesture, so a tap and a full charge are visibly different
   spins. Hold length and flick speed feed the same curve, so both gestures
   produce the same family of spins.
-- Respects `prefers-reduced-motion` (no wind-up, and one short single-turn
-  spin).
+- The rim is milled with grip notches, which is the whole hint that the wheel
+  can be grabbed — a wheel you can turn looks like one. On a first visit it also
+  nudges itself once, and never again after that.
+- Respects `prefers-reduced-motion` (no wind-up, no nudge, and one short
+  single-turn spin).
 - Best score persists via `localStorage` (and the Claude Artifacts
   `window.storage` API when running inside that environment).
