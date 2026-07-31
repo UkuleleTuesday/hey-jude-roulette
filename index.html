@@ -81,11 +81,9 @@
     .wheel-wrap{width:min(100%,46vh);}
   }
   svg{width:100%;height:100%;display:block;overflow:visible;}
-  #wheel{
-    transition:transform 4.6s cubic-bezier(.13,.72,.08,1);
-    transform-box:view-box;transform-origin:300px 300px;
-  }
-  @media (prefers-reduced-motion:reduce){#wheel{transition-duration:1s;}}
+  /* The spin transition is written from JS — its duration and revolution count
+     scale with how long the hub was held. */
+  #wheel{transform-box:view-box;transform-origin:300px 300px;}
 
   .hub{
     position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
@@ -98,24 +96,35 @@
     transition:background .18s ease,transform .18s ease;z-index:4;
     touch-action:none;user-select:none;-webkit-user-select:none;
   }
-  .hub[data-mode=spin]:hover:not(:disabled){background:#f3c463;}
-  .hub:active:not(:disabled):not([data-mode=locked]){transform:translate(-50%,-50%) scale(.965);}
-  .hub:disabled{background:#3b5560;color:rgba(243,234,222,.4);cursor:default;}
+  .hub[data-mode=spin]:hover{background:#f3c463;}
+  .hub:active:not([data-mode=busy]):not([data-mode=locked]):not(.charging){transform:translate(-50%,-50%) scale(.965);}
+  .hub[data-mode=busy]{background:#3b5560;color:rgba(243,234,222,.4);cursor:default;}
   .hub:focus-visible{outline:2px solid var(--cream);outline-offset:5px;}
   .hub .lab{position:relative;z-index:1;padding:0 10%;text-align:center;
     line-height:1.12;white-space:pre-line;}
   .hub .fill{position:absolute;inset:0;border-radius:50%;z-index:0;opacity:0;}
 
-  /* After the set ends the hub itself becomes the hold-to-play-again control. */
+  /* Loading the spin: the ring fills and the hub swells and glows as it charges.
+     The base transform is the centring translate, so it has to be re-declared. */
+  .hub.charging{
+    transform:translate(-50%,-50%) scale(calc(1 + var(--p,0)*.0006));
+    box-shadow:0 0 calc(var(--p,0)*.22px) rgba(233,180,76,.75);
+    transition:background .18s ease; /* not transform — --p changes every frame */
+  }
+  .hub.charging .fill{
+    opacity:1;
+    background:conic-gradient(rgba(8,22,27,.22) calc(var(--p,0) * 1%),transparent 0);
+  }
+
+  /* After the set ends the hub itself becomes the play-again control. */
   .hub[data-mode=locked],.hub[data-mode=again]{
     background:#3b5560;border-color:rgba(233,180,76,.4);
     font-size:clamp(9px,1.5vw,13px);letter-spacing:.03em;
   }
   .hub[data-mode=locked]{color:rgba(243,234,222,.4);cursor:default;}
   .hub[data-mode=again]{color:var(--cream);}
-  .hub[data-mode=locked] .fill,.hub[data-mode=again] .fill{opacity:1;}
-  .hub[data-mode=locked] .fill{background:conic-gradient(rgba(243,234,222,.09) calc(var(--p,0) * 1%),transparent 0);}
-  .hub[data-mode=again] .fill{background:conic-gradient(var(--gold-dim) calc(var(--p,0) * 1%),transparent 0);}
+  .hub[data-mode=again]:hover{background:#4a6874;}
+  .hub[data-mode=locked] .fill{opacity:1;background:conic-gradient(rgba(243,234,222,.09) calc(var(--p,0) * 1%),transparent 0);}
 
   .popup{
     position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
@@ -290,7 +299,7 @@
           <circle cx="300" cy="300" r="86" fill="#0d242c" stroke="#a67c2c" stroke-width="1"/>
           <polygon points="300,54 288,20 312,20" fill="#e9b44c" stroke="#08161b" stroke-width="1.5"/>
         </svg>
-        <button class="hub" id="spin" data-mode="spin"><span class="fill" aria-hidden="true"></span><span class="lab">Spin</span></button>
+        <button class="hub" id="spin" data-mode="spin" aria-disabled="false"><span class="fill" aria-hidden="true"></span><span class="lab">Spin</span></button>
       </div>
       <p class="hint" id="hint" hidden></p>
       <p class="status" id="status" role="status" aria-live="polite"></p>
@@ -305,7 +314,7 @@
       <h2 id="codaHead">In the coda</h2>
       <p class="lede">Whatever the wheel piles onto the coda.</p>
       <ol class="setlist" id="setlist"></ol>
-      <p class="empty" id="empty">Nothing yet. Spin to start.</p>
+      <p class="empty" id="empty">Nothing yet. Hold the hub to spin.</p>
       <div class="tally"><span id="left">22 songs left</span><span id="odds">Loser: 4/26</span></div>
     </aside>
   </div>
@@ -431,11 +440,13 @@ const wheel=document.getElementById("wheel");
 const wrap=document.getElementById("wrap");
 const spinBtn=document.getElementById("spin");
 const spinLab=spinBtn.querySelector(".lab");
-const spinFill=spinBtn.querySelector(".fill");
 const statusEl=document.getElementById("status");
+const hintEl=document.getElementById("hint");
 
 function hubLabel(t){spinLab.textContent=t;}
-function hubFill(pct){spinFill.style.setProperty("--p",pct);}
+// --p lives on the hub so both the ring inside it and the hub's own swell/glow
+// can read the charge.
+function hubFill(pct){spinBtn.style.setProperty("--p",pct);}
 
 function el(n,a){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;}
 function pt(a,r){const t=(a-90)*Math.PI/180;return[300+r*Math.cos(t),300+r*Math.sin(t)];}
@@ -502,29 +513,125 @@ function popup(w){
 }
 function clearPopup(){wrap.querySelectorAll(".popup").forEach(p=>p.remove());}
 
-function spin(){
-  if(spinning||!wedges.length)return;
-  if(spinBtn.dataset.mode!=="spin")return; // hub is the play-again control now
-  spinning=true;spinBtn.disabled=true;hubLabel("…");
-  clearPopup();
-  if(pendingFlip){
-    toLoser(pendingFlip);pendingFlip=null;
-    draw();refresh();
-    return later(launch,650);
-  }
-  launch();
+/* ---- Loading the spin ----
+   Hold the hub to wind it up, let go to fire. A longer hold means more
+   revolutions over a longer coast, so the wheel goes faster too. This is feel
+   only: the winner is still drawn uniformly at random, at the moment of release. */
+const CHARGE_MS=1800;            // hold time to reach full power
+const MIN_CHARGE=.10;            // a tap still spins, just the weakest one
+const TURNS_MIN=2, TURNS_MAX=12;
+const DUR_MIN=1.4, DUR_MAX=4.6;  // seconds of coast, at no charge / full charge
+const WIND_MAX=14;               // degrees of slingshot wind-back at full charge
+const MIN_WINDUP_MS=250;         // even a tap gets a beat to show the wedge flip
+const HINT_SPIN="Hold to load the spin";
+const HINT_FULL="Full power — let go";
+
+let chargeAt=null, chargePointer=null, chargeRaf=0, flipUndo=null;
+// When the last press/release happened, so the trailing click of a real gesture
+// can be told apart from a bare assistive-tech click. Starts far in the past:
+// performance.now() restarts at 0 on navigation, and a click in the first moments
+// after load is a real one.
+let gestureAt=-1e9;
+
+function reducedMotion(){return matchMedia("(prefers-reduced-motion: reduce)").matches;}
+function charging(){return chargeAt!==null;}
+
+// Single writer for the hub's state, so aria-disabled can't drift out of sync.
+// The hub is never natively disabled: that would drop focus mid-spin, which now
+// matters because the gesture itself can be a keyboard hold.
+function setMode(m){
+  if(spinBtn.dataset.mode===m)return;
+  spinBtn.dataset.mode=m;
+  spinBtn.setAttribute("aria-disabled",(m==="spin"||m==="again")?"false":"true");
 }
 
-function launch(){
+// The wedge landed last spin turns into a Loser as the next spin loads, so the
+// wheel visibly turns against you while you wind up. A cancelled charge has to
+// be able to put it back, and toLoser() overwrites the title, so stash it.
+function flipPending(){
+  if(!pendingFlip)return;
+  const w=pendingFlip;
+  flipUndo={w,title:w.title,artist:w.artist};
+  toLoser(w);pendingFlip=null;
+  draw();refresh();
+}
+function unflipPending(){
+  if(!flipUndo)return;
+  const {w,title,artist}=flipUndo;
+  w.title=title;w.artist=artist;w.over=false;w.consumed=true;
+  pendingFlip=w;flipUndo=null;
+  draw();refresh();
+}
+
+// `pointerId` identifies what has to let go again; omitted for keyboard and for
+// the assistive-tech click path. Assigned only once the guards have passed, so a
+// stray second press can't steal the running charge's identity.
+function beginCharge(pointerId){
+  if(spinning||charging()||!wedges.length)return;
+  if(spinBtn.dataset.mode!=="spin")return; // hub is the play-again control now
+  clearPopup();
+  chargeAt=performance.now();gestureAt=chargeAt;
+  chargePointer=pointerId===undefined?null:pointerId;
+  spinBtn.classList.add("charging");
+  flipPending();
+  wheel.style.transition="none";
+  chargeFrame();
+}
+
+function chargeFrame(){
+  if(!charging())return;
+  const q=Math.min(1,(performance.now()-chargeAt)/CHARGE_MS);
+  hubFill(q*100);
+  hintEl.textContent=q>=1?HINT_FULL:HINT_SPIN;
+  // The wind-back is a purely visual offset — `rotation` itself stays put, so
+  // the landing angle worked out at release is unaffected.
+  if(!reducedMotion())wheel.style.transform=`rotate(${rotation-q*WIND_MAX}deg)`;
+  chargeRaf=requestAnimationFrame(chargeFrame);
+}
+
+// Tears down the charge without deciding what happens next.
+function endCharge(){
+  cancelAnimationFrame(chargeRaf);chargeRaf=0;
+  chargeAt=null;chargePointer=null;
+  spinBtn.classList.remove("charging");
+  hubFill(0);hintEl.textContent=HINT_SPIN;
+}
+
+function releaseCharge(){
+  if(!charging())return;
+  const held=performance.now()-chargeAt;
+  const q=Math.max(MIN_CHARGE,Math.min(1,held/CHARGE_MS));
+  endCharge();gestureAt=performance.now();
+  spinning=true;setMode("busy");hubLabel("…");
+  statusEl.textContent="Spinning…";
+  const wait=Math.max(0,MIN_WINDUP_MS-held);
+  wait?later(()=>launch(q),wait):launch(q);
+}
+
+function cancelCharge(){
+  if(!charging())return;
+  endCharge();gestureAt=performance.now();
+  unflipPending();
+  wheel.style.transition="transform .3s ease";
+  wheel.style.transform=`rotate(${rotation}deg)`;
+}
+
+function launch(q){
+  flipUndo=null;
   const i=Math.floor(Math.random()*wedges.length);
   const seg=360/wedges.length;
   const jitter=(Math.random()-.5)*seg*.7;
   const target=(360-(i*seg+seg/2+jitter))%360;
-  const delta=((target-(rotation%360))+360)%360 + 360*(5+Math.floor(Math.random()*3));
-  rotation+=delta;
+  const slow=reducedMotion();
+  const turns=slow?1:TURNS_MIN+Math.round(q*(TURNS_MAX-TURNS_MIN));
+  const ms=Math.round((slow?1:DUR_MIN+q*(DUR_MAX-DUR_MIN))*1000);
+  rotation+=((target-(rotation%360))+360)%360 + 360*turns;
+  // The charge ran with the transition off, so commit the wound-back position
+  // as the transition's start value before handing over to it.
+  wheel.style.transition=`transform ${ms}ms cubic-bezier(.13,.72,.08,1)`;
+  wheel.getBoundingClientRect();
   wheel.style.transform=`rotate(${rotation}deg)`;
-  const wait=matchMedia("(prefers-reduced-motion: reduce)").matches?1150:4650;
-  later(()=>land(i),wait);
+  later(()=>land(i),ms+60); // one source of truth for how long the spin lasts
 }
 
 function land(i){
@@ -538,7 +645,7 @@ function land(i){
   pendingFlip=w;
   draw();refresh();
   if(!songsLeft())return later(clearSweep,900);
-  spinBtn.disabled=false;hubLabel("Spin");
+  setMode("spin");hubLabel("Spin");
 }
 
 async function saveBest(){
@@ -552,58 +659,42 @@ async function loadBest(){
   try{const v=localStorage.getItem("roulette:best");if(v)best=parseInt(v,10);}catch(e){}
 }
 
-const LOCK_MS=10000, HOLD_MS=2500;
-// Tears down the armed play-again loop, so a restart from anywhere (a finished
-// hold, or Apply & restart in settings) hands the hub back to spinning.
+const LOCK_MS=10000;
+// Tears down the armed play-again countdown, so a restart from anywhere (the
+// play-again press, or Apply & restart in settings) hands the hub back to spinning.
 let restartTeardown=null;
 
-// The hub in the middle of the wheel doubles as the play-again control once
-// the set is over: same button, hold-to-confirm instead of click-to-spin.
+// The hub in the middle of the wheel doubles as the play-again control once the
+// set is over: same button, and the countdown is the only guard against a
+// re-roll — once it runs out, it's a plain press.
 function armRestart(){
-  const btn=spinBtn, hint=document.getElementById("hint");
   if(restartTeardown)restartTeardown();
-  hint.hidden=false;
-  btn.disabled=false;btn.dataset.mode="locked";
-  let unlockAt=Date.now()+(settings.lockRestart?LOCK_MS:0), holdStart=null, raf;
+  hintEl.hidden=false;
+  setMode("locked");
+  const unlockAt=Date.now()+(settings.lockRestart?LOCK_MS:0);
+  let raf=0;
 
   function frame(){
-    const now=Date.now();
-    if(now<unlockAt){
-      btn.dataset.mode="locked";
-      hubLabel("Locked\n"+Math.ceil((unlockAt-now)/1000));
-      hubFill(100-(unlockAt-now)/LOCK_MS*100);
-      hint.textContent="No re-rolls. Beck stands.";
-    }else if(holdStart){
-      const q=Math.min(1,(now-holdStart)/HOLD_MS);
-      hubFill(q*100);
-      hubLabel(q<1?"Keep\nholding":"Go");
-      if(q>=1){teardown();reset();return;}
-    }else{
-      btn.dataset.mode="again";hubFill(0);
-      hubLabel("Hold\nto play\nagain");
-      hint.textContent="Press and hold 2.5s";
+    const left=unlockAt-Date.now();
+    if(left<=0){
+      raf=0;
+      setMode("again");hubFill(0);
+      hubLabel("Play\nagain");
+      hintEl.textContent="Press to start a fresh set";
+      return; // nothing left to animate until the hub is pressed
     }
+    hubLabel("Locked\n"+Math.ceil(left/1000));
+    hubFill(100-left/LOCK_MS*100);
+    hintEl.textContent="No re-rolls. Beck stands.";
     raf=requestAnimationFrame(frame);
   }
   frame();
 
-  const down=e=>{e.preventDefault();if(Date.now()>=unlockAt&&!holdStart)holdStart=Date.now();};
-  const up=()=>{holdStart=null;};
-  function teardown(){
-    cancelAnimationFrame(raf);hint.hidden=true;hubFill(0);
-    btn.removeEventListener("pointerdown",down);btn.removeEventListener("pointerup",up);
-    btn.removeEventListener("pointerleave",up);btn.removeEventListener("pointercancel",up);
-    btn.removeEventListener("keydown",kd);btn.removeEventListener("keyup",up);
+  restartTeardown=function teardown(){
+    if(raf)cancelAnimationFrame(raf);
+    raf=0;hintEl.hidden=true;hubFill(0);
     restartTeardown=null;
-  }
-  const kd=e=>{if(e.key===" "||e.key==="Enter")down(e);};
-  btn.addEventListener("pointerdown",down);
-  btn.addEventListener("pointerup",up);
-  btn.addEventListener("pointerleave",up);
-  btn.addEventListener("pointercancel",up);
-  btn.addEventListener("keydown",kd);
-  btn.addEventListener("keyup",up);
-  restartTeardown=teardown;
+  };
 }
 
 function finish(title,sub,winning){
@@ -628,10 +719,10 @@ function clearSweep(){
 
 function reset(){
   if(restartTeardown)restartTeardown();
+  endCharge();flipUndo=null;
   clearTimers();spinning=false;
   pendingFlip=null;clearPopup();
   document.getElementById("verdict").hidden=true;
-  document.getElementById("hint").hidden=true;
   document.getElementById("codaHead").hidden=false;
   document.querySelector(".lede").hidden=false;
   loserSeq=0;
@@ -642,23 +733,65 @@ function reset(){
   wedges=[];
   for(let i=0,q=0;i<total;i++) wedges.push(spots.has(i)?newLoser():songs[q++]);
   won=[];rotation=0;
+  // Snap back to 0° without animating. No need to restore the transition —
+  // launch() sets its own every spin.
   wheel.style.transition="none";wheel.style.transform="rotate(0deg)";
-  requestAnimationFrame(()=>{wheel.style.transition="";});
   draw();refresh();
-  spinBtn.disabled=false;spinBtn.dataset.mode="spin";hubFill(0);hubLabel("Spin");
+  setMode("spin");hubFill(0);hubLabel("Spin");
+  hintEl.hidden=false;hintEl.textContent=HINT_SPIN;
   statusEl.textContent="";
 }
 
-// A press that finishes the play-again hold still ends in a click on the hub —
-// only spin when the press that produced the click began in spin mode.
-let pressMode="spin";
-spinBtn.addEventListener("pointerdown",()=>{pressMode=spinBtn.dataset.mode;});
-spinBtn.addEventListener("keydown",e=>{
-  if(e.key===" "||e.key==="Enter")pressMode=spinBtn.dataset.mode;
+/* ---- Hub gestures ----
+   Every listener here is permanent and bails unless the hub is in spin mode, so
+   the play-again control never sees a charge. */
+spinBtn.addEventListener("pointerdown",e=>{
+  if(spinBtn.dataset.mode!=="spin")return; // let the play-again press through
+  e.preventDefault();
+  spinBtn.focus({preventScroll:true});     // preventDefault suppressed the implicit focus
+  beginCharge(e.pointerId);
+  if(charging())try{spinBtn.setPointerCapture(e.pointerId);}catch(err){}
 });
+
+// Releasing is watched on the window rather than the hub: dragging a finger off
+// the hub mid-hold must not throw away a loaded spin, and this doesn't depend on
+// pointer capture retargeting the way boundary events would.
+addEventListener("pointerup",e=>{
+  if(charging()&&e.pointerId===chargePointer)releaseCharge();
+});
+addEventListener("pointercancel",e=>{
+  if(charging()&&e.pointerId===chargePointer)cancelCharge();
+});
+
+spinBtn.addEventListener("keydown",e=>{
+  if(e.key!==" "&&e.key!=="Enter")return;
+  if(spinBtn.dataset.mode!=="spin")return; // Enter/Space reach the native click
+  e.preventDefault();                      // no page scroll, and no synthetic click
+  if(e.repeat)return;                      // auto-repeat must not restart the charge
+  beginCharge();
+});
+spinBtn.addEventListener("keyup",e=>{
+  // chargePointer===null only for a keyboard charge, so a key release can't fire
+  // a spin that a pointer is still holding.
+  if((e.key===" "||e.key==="Enter")&&chargePointer===null)releaseCharge();
+});
+
+// A charge can't outlive the press: bail out on anything that ends it elsewhere.
+spinBtn.addEventListener("blur",cancelCharge);
+addEventListener("blur",cancelCharge);
+addEventListener("keydown",e=>{if(e.key==="Escape")cancelCharge();});
+document.addEventListener("visibilitychange",()=>{if(document.hidden)cancelCharge();});
+
+// Screen-reader "activate", voice control and switch access dispatch a bare
+// click with no pointer or key events at all, so click still has to work — as
+// the weakest spin. A pointer press also produces a trailing click, hence the
+// guard: without it every hold would spin twice.
 spinBtn.addEventListener("click",()=>{
-  const started=pressMode;pressMode=spinBtn.dataset.mode;
-  if(started==="spin")spin();
+  const mode=spinBtn.dataset.mode;
+  if(mode==="again")return reset();
+  if(mode!=="spin")return;
+  if(performance.now()-gestureAt<600)return;
+  beginCharge();releaseCharge();
 });
 
 /* ---- Settings dialog ---- */
@@ -693,6 +826,7 @@ function fillForm(src){
   songErr.textContent="";
 }
 function openSettings(){
+  cancelCharge();
   fillForm(settings);
   if(typeof dlg.showModal==="function")dlg.showModal();
   else dlg.setAttribute("open","");

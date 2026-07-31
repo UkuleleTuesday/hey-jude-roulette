@@ -9,7 +9,8 @@ the set ends. Every spin, Loser included, flashes its title on screen like any
 other song, so the room knows what's coming.
 
 The run always ends on Loser. Each song you land on gets added to the wheel as a
-burnt-out (gold) wedge and then flips to a Loser on your next spin, so the odds
+burnt-out (gold) wedge and then flips to a Loser as you load the next spin —
+you watch the wheel turn against you while you hold — so the odds
 of landing the finale creep up the longer the jam goes — the set winds itself
 toward Beck. The length of your longest coda is saved locally between sessions.
 
@@ -23,15 +24,20 @@ self-contained file with no build step and no dependencies.
 ## How to run a set
 
 1. Start the **"Hey Jude"** coda looping — the "na na na na hey Jude" outro.
-2. Press **Spin** (the gold hub in the middle of the wheel).
+2. Press and **hold** the gold hub in the middle of the wheel. The ring around
+   it fills as the spin loads and the wheel winds back like a slingshot; let go
+   and it fires. The longer you hold, the more revolutions and the faster it
+   goes — a quick tap still spins, just weakly. The charge only changes how the
+   spin *feels*; it never changes the odds.
 3. Whatever it lands on is the next song to mash into the coda — its title
    pops up on screen and drops into the setlist on the right.
 4. Play it in over the outro, then spin again for the next one. Each landed
    song raises the share of Loser wedges.
 5. When the wheel hits **Loser / Beck**, that's the finale — Beck closes the
    set. (Sweep every other song in first and you get a full coda with no Beck.)
-6. To start a fresh set, wait out the lock and **hold** the hub — the same
-   middle button turns into the play-again control once the set is over.
+6. To start a fresh set, wait out the countdown and **press** the hub — the same
+   middle button turns into the play-again control once the set is over. Holding
+   is only for spinning.
 
 ## Customizing the wheel
 
@@ -41,7 +47,7 @@ Press the **gear icon** in the top-right to open Settings, where you can change:
 - **Songs on the wheel** — one per line as `Title - Artist` (artist optional).
 - **Lock restart after the set ends** — on by default. Protects against an
   immediate re-roll: once Beck closes the set, the hub stays locked
-  through a short countdown before you can hold it. Turn it off to allow
+  through a short countdown before you can press it. Turn it off to allow
   restarting straight away.
 
 Applying starts a fresh set, and your choices are saved in the browser
@@ -82,7 +88,11 @@ No framework, bundler, or CI is required — GitHub Pages serves the static
 ## Tech notes
 
 - Single `index.html`: HTML, CSS, and vanilla JS, no external requests.
-- The wheel is drawn as SVG and animated with a CSS `transform` transition.
-- Respects `prefers-reduced-motion` (shorter, simpler spin).
+- The wheel is drawn as SVG and animated with a CSS `transform` transition
+  written from JS: the duration and the number of revolutions both scale with
+  how long you held the hub, so a tap and a full charge are visibly different
+  spins.
+- Respects `prefers-reduced-motion` (no wind-up, and one short single-turn
+  spin).
 - Best score persists via `localStorage` (and the Claude Artifacts
   `window.storage` API when running inside that environment).
