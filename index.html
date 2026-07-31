@@ -121,14 +121,13 @@
     background:conic-gradient(rgba(8,22,27,.22) calc(var(--p,0) * 1%),transparent 0);
   }
 
-  /* After the set ends the hub itself becomes the play-again control. */
-  .hub[data-mode=locked],.hub[data-mode=again]{
+  /* Once the set ends the hub locks out for a countdown, then goes back to
+     being the spin control — the next spin simply starts a fresh set. */
+  .hub[data-mode=locked]{
     background:#3b5560;border-color:rgba(233,180,76,.4);
     font-size:clamp(9px,1.5vw,13px);letter-spacing:.03em;
+    color:rgba(243,234,222,.4);cursor:default;
   }
-  .hub[data-mode=locked]{color:rgba(243,234,222,.4);cursor:default;}
-  .hub[data-mode=again]{color:var(--cream);}
-  .hub[data-mode=again]:hover{background:#4a6874;}
   .hub[data-mode=locked] .fill{opacity:1;background:conic-gradient(rgba(243,234,222,.09) calc(var(--p,0) * 1%),transparent 0);}
 
   .popup{
@@ -341,7 +340,7 @@
         <input type="checkbox" id="lockRestart">
         <span>Lock restart after the set ends</span>
       </label>
-      <p class="help">Protect against an immediate re-roll: once Beck closes the set, the hub in the middle of the wheel turns into the play-again button and stays locked until the countdown runs out. Turn off to allow restarting straight away.</p>
+      <p class="help">Protect against an immediate re-roll: once Beck closes the set, the hub locks out for a short countdown. After that the next spin starts a fresh set. Turn off to allow spinning again straight away.</p>
     </div>
 
     <div class="field">
@@ -570,7 +569,7 @@ function charging(){return chargeAt!==null;}
 function setMode(m){
   if(spinBtn.dataset.mode===m)return;
   spinBtn.dataset.mode=m;
-  spinBtn.setAttribute("aria-disabled",(m==="spin"||m==="again")?"false":"true");
+  spinBtn.setAttribute("aria-disabled",m==="spin"?"false":"true");
 }
 
 // Remembered so a player who already knows the gesture isn't shown the
@@ -587,6 +586,9 @@ function markFlicked(){
 // settle, so the wheel reads as something that moves rather than a picture. The
 // motion *is* the message, so under reduced motion it simply doesn't happen.
 let nudged=false, userActed=false;
+// Raised when the set ends. The next spin gesture clears the board first, so
+// "spin again" and "start a fresh set" are the same action.
+let setOver=false;
 function nudgeWheel(){
   if(nudged||hasFlicked||reducedMotion())return;
   nudged=true;
@@ -630,7 +632,8 @@ function unflipPending(){
 // stray second press can't steal the running charge's identity.
 function beginCharge(pointerId){
   if(spinning||charging()||dragging()||!wedges.length)return;
-  if(spinBtn.dataset.mode!=="spin")return; // hub is the play-again control now
+  if(spinBtn.dataset.mode!=="spin")return; // locked out while the set winds up
+  if(setOver)reset();                      // this spin is the next set's first
   clearPopup();
   chargeAt=performance.now();gestureAt=chargeAt;
   chargePointer=pointerId===undefined?null:pointerId;
@@ -700,6 +703,8 @@ function beginDrag(e){
   // Only the wedge ring is grabbable — not the gap around the hub, and not the
   // corners of the square the wheel is drawn in.
   if(rad<DRAG_MIN_R||rad>DRAG_MAX_R)return false;
+  // Reset before the drag starts, so the wheel under the finger is the new one.
+  if(setOver)reset();
   clearPopup();
   dragBase=rotation;dragTotal=0;dragAngle=wheelAngle(e);
   dragPointer=e.pointerId;dragSamples=[{t:performance.now(),a:0}];
@@ -811,13 +816,14 @@ async function loadBest(){
 }
 
 const LOCK_MS=10000;
-// Tears down the armed play-again countdown, so a restart from anywhere (the
-// play-again press, or Apply & restart in settings) hands the hub back to spinning.
+// Tears down the countdown, so a restart from anywhere (the next spin, or
+// Apply & restart in settings) hands the hub back to spinning.
 let restartTeardown=null;
 
-// The hub in the middle of the wheel doubles as the play-again control once the
-// set is over: same button, and the countdown is the only guard against a
-// re-roll — once it runs out, it's a plain press.
+// When the set ends the hub locks out for a countdown — the one guard against
+// re-rolling away the finale. After that it goes back to saying Spin, and the
+// next spin starts a fresh set: there is no second control to learn, and no
+// moment where the hub quietly means something else.
 function armRestart(){
   if(restartTeardown)restartTeardown();
   hintEl.hidden=false;
@@ -829,10 +835,10 @@ function armRestart(){
     const left=unlockAt-Date.now();
     if(left<=0){
       raf=0;
-      setMode("again");hubFill(0);
-      hubLabel("Play\nagain");
-      hintEl.textContent="Press to start a fresh set";
-      return; // nothing left to animate until the hub is pressed
+      setMode("spin");hubFill(0);
+      hubLabel("Spin");
+      hintEl.textContent=HINT_SPIN;
+      return; // nothing left to animate until the next spin
     }
     hubLabel("Locked\n"+Math.ceil(left/1000));
     hubFill(100-left/LOCK_MS*100);
@@ -850,6 +856,7 @@ function armRestart(){
 
 function finish(title,sub,winning){
   saveBest();
+  setOver=true;
   const vb=document.getElementById("verdict");
   vb.hidden=false;vb.classList.toggle("win",!!winning);
   document.getElementById("verdictTitle").textContent=title;
@@ -870,7 +877,7 @@ function clearSweep(){
 
 function reset(){
   if(restartTeardown)restartTeardown();
-  endCharge();endDrag();flipUndo=null;
+  endCharge();endDrag();flipUndo=null;setOver=false;
   clearTimers();spinning=false;
   pendingFlip=null;clearPopup();
   document.getElementById("verdict").hidden=true;
@@ -895,9 +902,9 @@ function reset(){
 
 /* ---- Hub gestures ----
    Every listener here is permanent and bails unless the hub is in spin mode, so
-   the play-again control never sees a charge. */
+   a locked-out hub never sees a charge. */
 spinBtn.addEventListener("pointerdown",e=>{
-  if(spinBtn.dataset.mode!=="spin")return; // let the play-again press through
+  if(spinBtn.dataset.mode!=="spin")return; // locked out after the set ends
   e.preventDefault();
   spinBtn.focus({preventScroll:true});     // preventDefault suppressed the implicit focus
   beginCharge(e.pointerId);
@@ -962,9 +969,7 @@ document.addEventListener("visibilitychange",()=>{
 // the weakest spin. A pointer press also produces a trailing click, hence the
 // guard: without it every hold would spin twice.
 spinBtn.addEventListener("click",()=>{
-  const mode=spinBtn.dataset.mode;
-  if(mode==="again")return reset();
-  if(mode!=="spin")return;
+  if(spinBtn.dataset.mode!=="spin")return;
   if(performance.now()-gestureAt<600)return;
   beginCharge();releaseCharge();
 });

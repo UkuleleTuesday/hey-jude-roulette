@@ -62,7 +62,7 @@ const listLen = p => p.$$eval('#setlist li', n => n.length);
 const mode = p => p.$eval('#spin', el => el.dataset.mode);
 const isDragging = p => p.$eval('#wrap', el => el.classList.contains('dragging'));
 const settle = (p, t = 15000) =>
-  p.waitForFunction(() => ['spin', 'locked', 'again'].includes(document.querySelector('#spin').dataset.mode), null, { timeout: t });
+  p.waitForFunction(() => ['spin', 'locked'].includes(document.querySelector('#spin').dataset.mode), null, { timeout: t });
 
 // Sweep the pointer along the wheel's arc. `stepMs` throttles it to set the speed.
 async function arc(page, at, { from = 0, deg = 90, steps = 12, stepMs = 0, down = true, up = true, pause = 0, frac = 0.30 }) {
@@ -320,11 +320,14 @@ async function flickAt(page, degPerSec, { totalDeg = 120, steps = 8 } = {}) {
   await arc(page, at, { deg: 90, steps: 12, stepMs: 0 });
   await page.waitForTimeout(400);
   ok(!(await isDragging(page)) && (await spins(page)).length === before, 'the wheel is inert during the end-of-set countdown');
-  await page.waitForFunction(() => document.querySelector('#spin').dataset.mode === 'again', null, { timeout: 20000 });
+  // Once the lock lifts the wheel is live again, and a flick both clears the
+  // finished set and spins the new one — the same gesture, no second control.
+  await page.waitForFunction(() => document.querySelector('#spin').dataset.mode === 'spin', null, { timeout: 20000 });
+  ok(await listLen(page) === 1, 'the finished setlist stays up until something spins');
   await arc(page, at, { deg: 90, steps: 12, stepMs: 0 });
   await page.waitForTimeout(400);
-  ok((await spins(page)).length === before, 'and inert in play-again mode');
-  ok(await mode(page) === 'again', 'a flick does not restart the set');
+  ok((await spins(page)).length === before + 1, `a flick after the lock starts the next set (launches=${(await spins(page)).length})`);
+  ok(await page.$eval('#verdict', el => el.hidden), 'and clears the verdict');
   ok(errs.length === 0, `no page errors${errs.length ? ': ' + errs[0] : ''}`);
   await page.context().close();
 }

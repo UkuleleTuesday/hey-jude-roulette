@@ -55,7 +55,7 @@ const strayed = async (page, ms) => {
 
   // and they survive a redraw
   await page.locator('#spin').click();
-  await page.waitForFunction(() => ['spin', 'locked', 'again'].includes(document.querySelector('#spin').dataset.mode), null, { timeout: 15000 });
+  await page.waitForFunction(() => ['spin', 'locked'].includes(document.querySelector('#spin').dataset.mode), null, { timeout: 15000 });
   ok(await page.$$eval('#wheel line', ns => ns.length) === 72, 'and are still there after the wheel redraws');
   ok(errs.length === 0, `no page errors${errs.length ? ': ' + errs[0] : ''}`);
   await page.context().close();

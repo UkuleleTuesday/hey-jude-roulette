@@ -55,7 +55,7 @@ const listLen = p => p.$$eval('#setlist li', n => n.length);
 const mode = p => p.$eval(hub, el => el.dataset.mode);
 const charging = p => p.$eval(hub, el => el.classList.contains('charging'));
 const settle = (p, t = 15000) =>
-  p.waitForFunction(() => ['spin', 'locked', 'again'].includes(document.querySelector('#spin').dataset.mode), null, { timeout: t });
+  p.waitForFunction(() => ['spin', 'locked'].includes(document.querySelector('#spin').dataset.mode), null, { timeout: t });
 
 // --- 1. hold duration drives the spin, and one gesture == one spin -----------
 {
@@ -242,7 +242,7 @@ const settle = (p, t = 15000) =>
   await page.context().close();
 }
 
-// --- 8. end of set: countdown, then a plain press ---------------------------
+// --- 8. end of set: countdown, then the hub is just Spin again --------------
 {
   const { page, errs } = await newPage();
   await page.evaluate(() => localStorage.setItem('roulette:settings',
@@ -254,6 +254,7 @@ const settle = (p, t = 15000) =>
   const lockedLabel = await page.$eval('#spin .lab', el => el.textContent);
   ok(/^Locked/.test(lockedLabel), `set ends into a locked countdown ("${lockedLabel.replace(/\n/g, ' ')}")`);
   ok(await page.$eval(hub, el => el.getAttribute('aria-disabled')) === 'true', 'locked hub is aria-disabled');
+  ok(!(await page.$eval('#verdict', el => el.hidden)), 'the verdict is on screen');
 
   const b2 = await page.locator(hub).boundingBox();
   await page.mouse.move(b2.x + b2.width / 2, b2.y + b2.height / 2);
@@ -263,28 +264,30 @@ const settle = (p, t = 15000) =>
   await page.waitForTimeout(100);
   const spinsBefore = (await spins(page)).length;
 
-  await page.waitForFunction(() => document.querySelector('#spin').dataset.mode === 'again', null, { timeout: 20000 });
-  const againLabel = await page.$eval('#spin .lab', el => el.textContent);
-  ok(/Play/.test(againLabel), `unlocks to a plain play-again button ("${againLabel.replace(/\n/g, ' ')}")`);
-  ok(await page.$eval('#hint', el => el.textContent).then(t => /Press/.test(t)), 'hint says press, not hold');
+  // The countdown hands the hub straight back — no second control to learn.
+  await page.waitForFunction(() => document.querySelector('#spin').dataset.mode === 'spin', null, { timeout: 20000 });
+  const label = await page.$eval('#spin .lab', el => el.textContent);
+  ok(label === 'Spin', `unlocks back to Spin, not a second button ("${label.replace(/\n/g, ' ')}")`);
+  ok(await page.$eval('#hint', el => el.textContent).then(t => /Hold/.test(t)), 'and to the usual spin hint');
   ok(await page.$eval(hub, el => el.getAttribute('aria-disabled')) === 'false', 'unlocked hub is not aria-disabled');
   ok((await spins(page)).length === spinsBefore, 'the press attempt during the lock never spun');
+  ok(await listLen(page) === 1, 'the finished setlist is still on screen until you spin');
 
-  await page.click(hub);
-  await page.waitForTimeout(250);
-  ok(await mode(page) === 'spin', 'a single press restarts the set');
-  ok(await listLen(page) === 0, 'restart clears the setlist');
-  ok(await rot(page) === 0, 'restart snaps the wheel back to 0deg');
-  ok(await page.$eval('#hint', el => el.textContent).then(t => /Hold/.test(t)), 'hint is back to the spin instruction');
-  ok(await page.$eval('#verdict', el => el.hidden), 'verdict panel hidden again');
-
-  // and the charge gesture works again after the restart
+  // One gesture both clears the board and spins the fresh wheel.
+  const spentAngle = await rot(page);
   const b3 = await page.locator(hub).boundingBox();
   await page.mouse.move(b3.x + b3.width / 2, b3.y + b3.height / 2);
   await page.mouse.down(); await page.waitForTimeout(350);
-  ok(await charging(page), 'hold-to-spin works again after a restart');
+  ok(await charging(page), 'holding the hub works again straight away');
+  ok(await page.$eval('#verdict', el => el.hidden), 'and the verdict clears as the new set begins');
+  // Back to 0, give or take the wind-back the hold has already applied.
+  ok(spentAngle > 360 && Math.abs(await rot(page)) <= 15,
+     `the wheel snapped back for the new set (${spentAngle.toFixed(0)}deg -> ${(await rot(page)).toFixed(1)}deg)`);
   await page.mouse.up();
-  await page.waitForTimeout(300);
+  await page.waitForFunction(() => document.querySelector('#spin').dataset.mode === 'busy', null, { timeout: 3000 });
+  ok((await spins(page)).length === spinsBefore + 1, 'that same gesture spun the new wheel');
+  await settle(page);
+  ok(await listLen(page) === 1, 'and landed the first song of the fresh set');
   ok(errs.length === 0, `no page errors${errs.length ? ': ' + errs[0] : ''}`);
   await page.context().close();
 }
