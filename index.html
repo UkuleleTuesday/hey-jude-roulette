@@ -89,6 +89,21 @@
      scale with how long the hub was held. */
   #wheel{transform-box:view-box;transform-origin:300px 300px;cursor:grab;}
 
+  /* The flick cue nudges itself round the wheel — the motion is the message. */
+  #flickCue{
+    transform-box:view-box;transform-origin:300px 300px;
+    pointer-events:none;
+    animation:flickNudge 2.8s ease-in-out infinite;
+  }
+  @keyframes flickNudge{
+    0%,100%{transform:rotate(0deg);opacity:.28;}
+    35%{transform:rotate(10deg);opacity:.9;}
+    72%{transform:rotate(0deg);opacity:.28;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    #flickCue{animation:none;opacity:.55;}
+  }
+
   .hub{
     position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
     width:23.5%;aspect-ratio:1;border-radius:50%;padding:0;overflow:hidden;
@@ -301,6 +316,13 @@
           <circle cx="300" cy="300" r="285.5" fill="#0d242c" stroke="#a67c2c" stroke-width="1"/>
           <g id="wheel"></g>
           <circle cx="300" cy="300" r="86" fill="#0d242c" stroke="#a67c2c" stroke-width="1"/>
+          <!-- Shown until the first flick lands: the gesture is otherwise
+               invisible, and on a phone there's no cursor to give it away. -->
+          <g id="flickCue" aria-hidden="true" hidden>
+            <path d="M478.5 365A190 190 0 0 1 365 478.5" fill="none"
+              stroke="#e9b44c" stroke-width="5" stroke-linecap="round"/>
+            <polygon points="355.6,481.9 366.4,470.5 371.2,483.7" fill="#e9b44c"/>
+          </g>
           <polygon points="300,54 288,20 312,20" fill="#e9b44c" stroke="#08161b" stroke-width="1.5"/>
         </svg>
         <button class="hub" id="spin" data-mode="spin" aria-disabled="false"><span class="fill" aria-hidden="true"></span><span class="lab">Spin</span></button>
@@ -446,6 +468,7 @@ const spinBtn=document.getElementById("spin");
 const spinLab=spinBtn.querySelector(".lab");
 const statusEl=document.getElementById("status");
 const hintEl=document.getElementById("hint");
+const flickCue=document.getElementById("flickCue");
 
 function hubLabel(t){spinLab.textContent=t;}
 // --p lives on the hub so both the ring inside it and the hub's own swell/glow
@@ -557,6 +580,23 @@ function setMode(m){
   if(spinBtn.dataset.mode===m)return;
   spinBtn.dataset.mode=m;
   spinBtn.setAttribute("aria-disabled",(m==="spin"||m==="again")?"false":"true");
+  showFlickCue();
+}
+
+// The arrow teaches the flick once and then gets out of the way for good — it
+// only shows while the wheel is idle, and never again after a flick lands.
+let hasFlicked=false;
+try{hasFlicked=!!localStorage.getItem("roulette:flicked");}catch(e){}
+function showFlickCue(){
+  // toggleAttribute, not .hidden: that property is HTMLElement-only, so on an
+  // SVG group it would set a harmless expando and leave the element hidden.
+  flickCue.toggleAttribute("hidden",hasFlicked||spinBtn.dataset.mode!=="spin");
+}
+function markFlicked(){
+  if(hasFlicked)return;
+  hasFlicked=true;
+  try{localStorage.setItem("roulette:flicked","1");}catch(e){}
+  showFlickCue();
 }
 
 // The wedge landed last spin turns into a Loser as the next spin loads, so the
@@ -712,7 +752,7 @@ function releaseDrag(){
     :span>0?swept/span*1000
     :swept>0?FLICK_FULL:0;
   if(v<FLICK_MIN)return settleDrag(); // includes every backwards flick
-  endDrag();gestureAt=now;
+  endDrag();gestureAt=now;markFlicked();
   const q=Math.max(MIN_CHARGE,Math.min(1,(v-FLICK_MIN)/(FLICK_FULL-FLICK_MIN)));
   spinning=true;setMode("busy");hubLabel("…");
   statusEl.textContent="Spinning…";
@@ -840,7 +880,7 @@ function reset(){
   // launch() sets its own every spin.
   wheel.style.transition="none";wheel.style.transform="rotate(0deg)";
   draw();refresh();
-  setMode("spin");hubFill(0);hubLabel("Spin");
+  setMode("spin");showFlickCue();hubFill(0);hubLabel("Spin");
   hintEl.hidden=false;hintEl.textContent=HINT_SPIN;
   statusEl.textContent="";
 }
