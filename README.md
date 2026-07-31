@@ -38,7 +38,8 @@ self-contained file with no build step and no dependencies.
    Either way, the gesture only changes how the spin *feels*. It never changes
    the odds.
 3. Whatever it lands on is the next song to mash into the coda — its title
-   pops up on screen and drops into the setlist on the right.
+   pops up on screen and drops onto the top of the setlist on the right. The
+   list runs newest first; the numbers still say when each song went in.
 4. Play it in over the outro, then spin again for the next one. Each landed
    song raises the share of Loser wedges.
 5. When the wheel hits **Loser / Beck**, that's the finale — Beck closes the

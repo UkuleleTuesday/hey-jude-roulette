@@ -159,13 +159,9 @@
     font-family:var(--mono);font-size:clamp(9px,1.2vh,11px);letter-spacing:.34em;
     text-transform:uppercase;color:var(--gold-dim);margin:0 0 4px;font-weight:400;
   }
-  .lede{
-    flex:0 0 auto;font-size:clamp(11px,1.4vh,13px);color:var(--muted);
-    margin:0 0 clamp(6px,1.2vh,14px);line-height:1.4;
-  }
   .setlist{
     flex:1;min-height:0;overflow-y:auto;
-    list-style:none;margin:0;padding:0;counter-reset:s;
+    list-style:none;margin:0;padding:0;counter-reset:s var(--n,0);
   }
   .setlist li{
     display:flex;gap:14px;align-items:baseline;padding:clamp(5px,.9vh,10px) 0;
@@ -173,7 +169,7 @@
     animation:slide .3s ease both;
   }
   .setlist li::before{
-    counter-increment:s;content:counter(s,decimal-leading-zero);
+    counter-increment:s -1;content:counter(s,decimal-leading-zero);
     font-family:var(--mono);font-size:11px;color:var(--gold-dim);flex:0 0 auto;
   }
   .setlist .title{
@@ -183,7 +179,6 @@
   .setlist .artist{display:block;font-size:clamp(11px,1.4vh,14px);color:var(--muted);margin-top:2px;}
   .setlist li.fresh .title{color:var(--gold);}
   @keyframes slide{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
-  .empty{font-size:13px;color:rgba(243,234,222,.35);margin:0;padding:10px 0;}
   .tally{
     flex:0 0 auto;display:flex;justify-content:space-between;gap:12px;
     font-family:var(--mono);font-size:clamp(9px,1.2vh,12px);letter-spacing:.16em;
@@ -305,7 +300,6 @@
         </svg>
         <button class="hub" id="spin" data-mode="spin" aria-disabled="false"><span class="fill" aria-hidden="true"></span><span class="lab">Spin</span></button>
       </div>
-      <p class="hint" id="hint" hidden></p>
       <p class="status" id="status" role="status" aria-live="polite"></p>
     </section>
 
@@ -315,10 +309,7 @@
         <p class="verdict-sub" id="verdictSub"></p>
         <p class="best" id="bestLine"></p>
       </div>
-      <h2 id="codaHead">In the coda</h2>
-      <p class="lede">Whatever the wheel piles onto the coda.</p>
       <ol class="setlist" id="setlist"></ol>
-      <p class="empty" id="empty">Nothing yet. Hold the hub to spin.</p>
       <div class="tally"><span id="left">22 songs left</span><span id="odds">Loser: 4/26</span></div>
     </aside>
   </div>
@@ -449,7 +440,6 @@ const wrap=document.getElementById("wrap");
 const spinBtn=document.getElementById("spin");
 const spinLab=spinBtn.querySelector(".lab");
 const statusEl=document.getElementById("status");
-const hintEl=document.getElementById("hint");
 
 function hubLabel(t){spinLab.textContent=t;}
 // --p lives on the hub so both the ring inside it and the hub's own swell/glow
@@ -512,10 +502,13 @@ function refresh(){
   const n=songsLeft();
   document.getElementById("left").textContent=n+(n===1?" song left":" songs left");
   const list=document.getElementById("setlist");
+  // Newest on top: the thing you just landed is what the room is looking for.
+  // The counter runs down from the top so the numbers still say when each song
+  // went in — the first one played stays 01, it just sits at the bottom.
+  list.style.setProperty("--n",won.length+1);
   list.innerHTML=won.map((w,i)=>
     `<li class="${i===won.length-1?"fresh":""}"><div><span class="title">${w.title}</span><span class="artist">${w.artist}</span></div></li>`
-  ).join("");
-  document.getElementById("empty").style.display=won.length?"none":"block";
+  ).reverse().join("");
 }
 
 function popup(w){
@@ -540,8 +533,6 @@ const DUR_MIN=1.4, DUR_MAX=4.6;  // seconds of coast, at no charge / full charge
 const WIND_MAX=14;               // degrees of slingshot wind-back at full charge
 const MIN_WINDUP_MS=250;         // even a tap gets a beat to show the wedge flip
 const NUDGE_DEG=9;               // the first-visit "this moves" nudge
-const HINT_SPIN="Hold the hub, or flick the wheel";
-const HINT_FULL="Full power — let go";
 
 /* The other way in: grab the wedges and flick. The wheel tracks the finger, and
    the speed you let go at picks a spin off the same curve a hold does. */
@@ -647,7 +638,6 @@ function chargeFrame(){
   if(!charging())return;
   const q=Math.min(1,(performance.now()-chargeAt)/CHARGE_MS);
   hubFill(q*100);
-  hintEl.textContent=q>=1?HINT_FULL:HINT_SPIN;
   // The wind-back is a purely visual offset — `rotation` itself stays put, so
   // the landing angle worked out at release is unaffected.
   if(!reducedMotion())wheel.style.transform=`rotate(${rotation-q*WIND_MAX}deg)`;
@@ -659,7 +649,7 @@ function endCharge(){
   cancelAnimationFrame(chargeRaf);chargeRaf=0;
   chargeAt=null;chargePointer=null;
   spinBtn.classList.remove("charging");
-  hubFill(0);hintEl.textContent=HINT_SPIN;
+  hubFill(0);
 }
 
 function releaseCharge(){
@@ -826,7 +816,6 @@ let restartTeardown=null;
 // moment where the hub quietly means something else.
 function armRestart(){
   if(restartTeardown)restartTeardown();
-  hintEl.hidden=false;
   setMode("locked");
   const unlockAt=Date.now()+(settings.lockRestart?LOCK_MS:0);
   let raf=0;
@@ -837,19 +826,17 @@ function armRestart(){
       raf=0;
       setMode("spin");hubFill(0);
       hubLabel("Spin");
-      hintEl.textContent=HINT_SPIN;
       return; // nothing left to animate until the next spin
     }
     hubLabel("Locked\n"+Math.ceil(left/1000));
     hubFill(100-left/LOCK_MS*100);
-    hintEl.textContent="No re-rolls. Beck stands.";
     raf=requestAnimationFrame(frame);
   }
   frame();
 
   restartTeardown=function teardown(){
     if(raf)cancelAnimationFrame(raf);
-    raf=0;hintEl.hidden=true;hubFill(0);
+    raf=0;hubFill(0);
     restartTeardown=null;
   };
 }
@@ -863,8 +850,6 @@ function finish(title,sub,winning){
   document.getElementById("verdictSub").textContent=sub;
   document.getElementById("bestLine").textContent=
     best!==null?"Longest coda: "+best+" song"+(best===1?"":"s"):"";
-  document.getElementById("codaHead").hidden=true;
-  document.querySelector(".lede").hidden=true;
   armRestart();
 }
 
@@ -881,8 +866,6 @@ function reset(){
   clearTimers();spinning=false;
   pendingFlip=null;clearPopup();
   document.getElementById("verdict").hidden=true;
-  document.getElementById("codaHead").hidden=false;
-  document.querySelector(".lede").hidden=false;
   loserSeq=0;
   const songs=settings.songs.map((s,i)=>({id:i,title:s.title,artist:s.artist,over:false,consumed:false}));
   const N=Math.min(clampLosers(settings.losers),MAX_LOSERS), total=songs.length+N;
@@ -896,7 +879,6 @@ function reset(){
   wheel.style.transition="none";wheel.style.transform="rotate(0deg)";
   draw();refresh();
   setMode("spin");hubFill(0);hubLabel("Spin");
-  hintEl.hidden=false;hintEl.textContent=HINT_SPIN;
   statusEl.textContent="";
 }
 

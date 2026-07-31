@@ -73,7 +73,8 @@ const settle = (p, t = 15000) =>
     await page.waitForFunction(() => document.querySelector('#spin').dataset.mode === 'busy');
     await settle(page);
     const s = (await spins(page)).at(-1);
-    return { ms: s.ms, delta: s.rot - before, wound: wound - before };
+    const list = await page.$$eval('#setlist .title', ns => ns.map(n => n.textContent));
+    return { ms: s.ms, delta: s.rot - before, wound: wound - before, list };
   };
 
   const tap = await hold(0);
@@ -100,6 +101,18 @@ const settle = (p, t = 15000) =>
   ok(full.wound < -5, `wheel winds back while loading (${full.wound.toFixed(1)}deg)`);
   ok((await spins(page)).length === 3, `3 gestures produced exactly 3 launches (got ${(await spins(page)).length})`);
   ok(await listLen(page) === 3, `setlist has exactly 3 entries — no double-spin (got ${await listLen(page)})`);
+
+  // Newest on top: each landing prepends one entry and leaves the rest alone.
+  // Stated as an invariant so it holds whatever the wheel happens to land on.
+  const prepended = (after, before) =>
+    after.length === before.length + 1 &&
+    JSON.stringify(after.slice(1)) === JSON.stringify(before);
+  ok(prepended(mid.list, tap.list) && prepended(full.list, mid.list),
+     `each landing goes on top, pushing the rest down (${full.list.join(' / ')})`);
+  ok(await page.$eval('#setlist li', el => el.classList.contains('fresh')),
+     'the top entry is the one just landed');
+  ok(await page.$eval('#setlist', el => el.style.getPropertyValue('--n')) === '4',
+     'the counter starts above the count so it can run down to 01 at the bottom');
   ok(errs.length === 0, `no page errors${errs.length ? ': ' + errs[0] : ''}`);
   await page.context().close();
 }
@@ -268,7 +281,6 @@ const settle = (p, t = 15000) =>
   await page.waitForFunction(() => document.querySelector('#spin').dataset.mode === 'spin', null, { timeout: 20000 });
   const label = await page.$eval('#spin .lab', el => el.textContent);
   ok(label === 'Spin', `unlocks back to Spin, not a second button ("${label.replace(/\n/g, ' ')}")`);
-  ok(await page.$eval('#hint', el => el.textContent).then(t => /Hold/.test(t)), 'and to the usual spin hint');
   ok(await page.$eval(hub, el => el.getAttribute('aria-disabled')) === 'false', 'unlocked hub is not aria-disabled');
   ok((await spins(page)).length === spinsBefore, 'the press attempt during the lock never spun');
   ok(await listLen(page) === 1, 'the finished setlist is still on screen until you spin');
