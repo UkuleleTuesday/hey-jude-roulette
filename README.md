@@ -12,7 +12,7 @@ The run always ends on Loser. Each song you land on gets added to the wheel as a
 burnt-out (gold) wedge and then flips to a Loser as you load the next spin —
 you watch the wheel turn against you while you hold — so the odds
 of landing the finale creep up the longer the jam goes — the set winds itself
-toward Beck. The length of your longest coda is saved locally between sessions.
+toward Beck.
 
 ## Play
 
@@ -125,5 +125,3 @@ itself still ships with nothing.
   nudges itself once, and never again after that.
 - Respects `prefers-reduced-motion` (no wind-up, no nudge, and one short
   single-turn spin).
-- Best score persists via `localStorage` (and the Claude Artifacts
-  `window.storage` API when running inside that environment).
