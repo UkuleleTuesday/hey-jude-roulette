@@ -1,0 +1,22 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Lockfile is committed, so the browser build is pinned along with the library.
+      - run: npm ci --no-audit --no-fund
+      # Only Chromium: the suites drive one browser, and pulling all three
+      # costs minutes for nothing.
+      - run: npx playwright install --with-deps chromium
+      - run: npm test

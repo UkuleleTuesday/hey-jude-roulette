@@ -90,8 +90,26 @@ This repo is set up to serve straight from the root of the default branch:
 5. After a minute or two the site is live at
    `https://<user>.github.io/hey-jude-roulette/`.
 
-No framework, bundler, or CI is required — GitHub Pages serves the static
+No framework or bundler is required — GitHub Pages serves the static
 `index.html` as-is.
+
+## Tests
+
+The spin gestures are covered by browser tests that drive the real page in
+Chromium. They run on every pull request, and locally with:
+
+```sh
+npm install
+npx playwright install chromium
+npm test
+```
+
+`npm test` serves the repo on an ephemeral port and runs each suite against it —
+`tests/hub.test.mjs` for the hold gesture and `tests/wheel.test.mjs` for the
+flick. Pass a name to run just one: `npm test wheel`.
+
+These are the only dependencies in the repo, and they are test-only: `index.html`
+itself still ships with nothing.
 
 ## Tech notes
 
