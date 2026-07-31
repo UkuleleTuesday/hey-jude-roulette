@@ -36,7 +36,7 @@ console.log(`serving ${ROOT} at ${BASE_URL}`);
 
 const suites = process.argv.slice(2);
 let failed = 0;
-for (const name of suites.length ? suites : ['hub', 'wheel']) {
+for (const name of suites.length ? suites : ['hub', 'wheel', 'cue']) {
   console.log(`\n──── ${name} ${'─'.repeat(Math.max(0, 58 - name.length))}\n`);
   const code = await new Promise(resolve =>
     spawn(process.execPath, [fileURLToPath(new URL(`${name}.test.mjs`, import.meta.url))],
