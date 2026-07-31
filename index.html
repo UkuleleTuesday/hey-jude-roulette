@@ -76,14 +76,18 @@
   .wheel-wrap{
     position:relative;aspect-ratio:1;
     width:min(100%,66vh);max-width:100%;
+    /* The wheel is draggable, so the browser must not claim the gesture as a
+       page pan, and a drag must not select the wedge labels. */
+    touch-action:none;user-select:none;-webkit-user-select:none;
   }
+  .wheel-wrap.dragging,.wheel-wrap.dragging #wheel{cursor:grabbing;}
   @media (max-width:900px),(orientation:portrait){
     .wheel-wrap{width:min(100%,46vh);}
   }
   svg{width:100%;height:100%;display:block;overflow:visible;}
   /* The spin transition is written from JS — its duration and revolution count
      scale with how long the hub was held. */
-  #wheel{transform-box:view-box;transform-origin:300px 300px;}
+  #wheel{transform-box:view-box;transform-origin:300px 300px;cursor:grab;}
 
   .hub{
     position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
@@ -523,10 +527,20 @@ const TURNS_MIN=2, TURNS_MAX=12;
 const DUR_MIN=1.4, DUR_MAX=4.6;  // seconds of coast, at no charge / full charge
 const WIND_MAX=14;               // degrees of slingshot wind-back at full charge
 const MIN_WINDUP_MS=250;         // even a tap gets a beat to show the wedge flip
-const HINT_SPIN="Hold to load the spin";
+const HINT_SPIN="Hold the hub, or flick the wheel";
 const HINT_FULL="Full power — let go";
 
+/* The other way in: grab the wedges and flick. The wheel tracks the finger, and
+   the speed you let go at picks a spin off the same curve a hold does. */
+const DRAG_MIN_R=INNER/600, DRAG_MAX_R=291/600; // the wedge ring, out to the rim
+const DRAG_DEADZONE=4;           // degrees before a touch counts as a drag
+const BACK_MAX=18;               // degrees of give before the wheel blocks
+const FLICK_MIN=140;             // deg/s — below this, letting go doesn't spin
+const FLICK_FULL=900;            // deg/s — full power
+const VEL_WINDOW=90;             // ms of movement behind the release
+
 let chargeAt=null, chargePointer=null, chargeRaf=0, flipUndo=null;
+let dragBase=null, dragTotal=0, dragAngle=0, dragPointer=null, dragSamples=[];
 // When the last press/release happened, so the trailing click of a real gesture
 // can be told apart from a bare assistive-tech click. Starts far in the past:
 // performance.now() restarts at 0 on navigation, and a click in the first moments
@@ -567,7 +581,7 @@ function unflipPending(){
 // the assistive-tech click path. Assigned only once the guards have passed, so a
 // stray second press can't steal the running charge's identity.
 function beginCharge(pointerId){
-  if(spinning||charging()||!wedges.length)return;
+  if(spinning||charging()||dragging()||!wedges.length)return;
   if(spinBtn.dataset.mode!=="spin")return; // hub is the play-again control now
   clearPopup();
   chargeAt=performance.now();gestureAt=chargeAt;
@@ -614,6 +628,95 @@ function cancelCharge(){
   unflipPending();
   wheel.style.transition="transform .3s ease";
   wheel.style.transform=`rotate(${rotation}deg)`;
+}
+
+function dragging(){return dragBase!==null;}
+
+// Pointer position about the wheel's centre. The angle runs clockwise from 12
+// o'clock, matching both the wedge layout (see pt()) and the sign of `rotation`;
+// the radius is a fraction of the wheel's width, so it compares against the
+// viewBox constants directly.
+function wheelAngle(e){
+  const r=wrap.getBoundingClientRect();
+  return Math.atan2(e.clientX-(r.left+r.width/2),(r.top+r.height/2)-e.clientY)*180/Math.PI;
+}
+function wheelRadius(e){
+  const r=wrap.getBoundingClientRect();
+  return Math.hypot(e.clientX-(r.left+r.width/2),e.clientY-(r.top+r.height/2))/r.width;
+}
+
+function beginDrag(e){
+  if(spinning||charging()||dragging()||!wedges.length)return false;
+  if(spinBtn.dataset.mode!=="spin")return false;
+  const rad=wheelRadius(e);
+  // Only the wedge ring is grabbable — not the gap around the hub, and not the
+  // corners of the square the wheel is drawn in.
+  if(rad<DRAG_MIN_R||rad>DRAG_MAX_R)return false;
+  clearPopup();
+  dragBase=rotation;dragTotal=0;dragAngle=wheelAngle(e);
+  dragPointer=e.pointerId;dragSamples=[{t:performance.now(),a:0}];
+  wrap.classList.add("dragging");
+  wheel.style.transition="none";
+  return true;
+}
+
+function dragMove(e){
+  if(!dragging()||e.pointerId!==dragPointer)return;
+  const a=wheelAngle(e);
+  let d=a-dragAngle;
+  if(d>180)d-=360;else if(d<-180)d+=360; // crossing 12 o'clock isn't a huge jump
+  dragAngle=a;
+  // The wheel gives a little against the spin and then blocks. Clamping the
+  // running total, not just the angle applied, is what makes the stop feel
+  // right: keep pulling backwards and nothing happens, but the moment you go
+  // forwards it moves with you instead of first undoing the overshoot.
+  dragTotal=Math.max(-BACK_MAX,dragTotal+d);
+  rotation=dragBase+dragTotal;
+  wheel.style.transform=`rotate(${rotation}deg)`;
+  if(Math.abs(dragTotal)>=DRAG_DEADZONE)flipPending();
+  const now=performance.now();
+  dragSamples.push({t:now,a:dragTotal});
+  while(dragSamples.length>2&&now-dragSamples[0].t>VEL_WINDOW)dragSamples.shift();
+}
+
+function endDrag(){
+  dragBase=null;dragTotal=0;dragPointer=null;dragSamples=[];
+  wrap.classList.remove("dragging");
+}
+
+// Ends a drag without spinning: the wheel keeps whatever angle it was turned to
+// — its resting angle carries no meaning — but the backwards give springs back
+// and the wedge flip is undone.
+function settleDrag(){
+  if(!dragging())return;
+  const base=dragBase;
+  endDrag();gestureAt=performance.now();
+  unflipPending();
+  if(rotation<base){
+    rotation=base;
+    wheel.style.transition="transform .3s ease";
+    wheel.style.transform=`rotate(${rotation}deg)`;
+  }
+}
+
+function releaseDrag(){
+  if(!dragging())return;
+  const now=performance.now();
+  const first=dragSamples[0], last=dragSamples[dragSamples.length-1];
+  const span=last.t-first.t, swept=last.a-first.a;
+  // A drag that stopped moving before letting go leaves a stale tail — that's
+  // not a flick, so only count movement that ran right up to the release. A
+  // flick fast enough to land inside one clock tick is the opposite of no
+  // movement, so it reads as full power rather than dividing by zero.
+  const v=now-last.t>=VEL_WINDOW?0
+    :span>0?swept/span*1000
+    :swept>0?FLICK_FULL:0;
+  if(v<FLICK_MIN)return settleDrag(); // includes every backwards flick
+  endDrag();gestureAt=now;
+  const q=Math.max(MIN_CHARGE,Math.min(1,(v-FLICK_MIN)/(FLICK_FULL-FLICK_MIN)));
+  spinning=true;setMode("busy");hubLabel("…");
+  statusEl.textContent="Spinning…";
+  launch(q);
 }
 
 function launch(q){
@@ -719,7 +822,7 @@ function clearSweep(){
 
 function reset(){
   if(restartTeardown)restartTeardown();
-  endCharge();flipUndo=null;
+  endCharge();endDrag();flipUndo=null;
   clearTimers();spinning=false;
   pendingFlip=null;clearPopup();
   document.getElementById("verdict").hidden=true;
@@ -776,11 +879,31 @@ spinBtn.addEventListener("keyup",e=>{
   if((e.key===" "||e.key==="Enter")&&chargePointer===null)releaseCharge();
 });
 
-// A charge can't outlive the press: bail out on anything that ends it elsewhere.
+/* ---- Wheel gestures ----
+   Grab the wedges and flick. Same guards as the hub, and the same reason for
+   watching the release on the window: a finger that slides off the wheel
+   mid-flick must not lose the gesture. */
+wrap.addEventListener("pointerdown",e=>{
+  if(e.target.closest(".hub"))return; // the hub runs its own hold
+  if(!beginDrag(e))return;
+  e.preventDefault();
+  try{wrap.setPointerCapture(e.pointerId);}catch(err){}
+});
+addEventListener("pointermove",dragMove);
+addEventListener("pointerup",e=>{
+  if(dragging()&&e.pointerId===dragPointer)releaseDrag();
+});
+addEventListener("pointercancel",e=>{
+  if(dragging()&&e.pointerId===dragPointer)settleDrag();
+});
+
+// Neither gesture can outlive the press: bail out on anything that ends it.
 spinBtn.addEventListener("blur",cancelCharge);
-addEventListener("blur",cancelCharge);
-addEventListener("keydown",e=>{if(e.key==="Escape")cancelCharge();});
-document.addEventListener("visibilitychange",()=>{if(document.hidden)cancelCharge();});
+addEventListener("blur",()=>{cancelCharge();settleDrag();});
+addEventListener("keydown",e=>{if(e.key==="Escape"){cancelCharge();settleDrag();}});
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){cancelCharge();settleDrag();}
+});
 
 // Screen-reader "activate", voice control and switch access dispatch a bare
 // click with no pointer or key events at all, so click still has to work — as

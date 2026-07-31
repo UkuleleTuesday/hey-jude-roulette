@@ -24,11 +24,19 @@ self-contained file with no build step and no dependencies.
 ## How to run a set
 
 1. Start the **"Hey Jude"** coda looping — the "na na na na hey Jude" outro.
-2. Press and **hold** the gold hub in the middle of the wheel. The ring around
-   it fills as the spin loads and the wheel winds back like a slingshot; let go
-   and it fires. The longer you hold, the more revolutions and the faster it
-   goes — a quick tap still spins, just weakly. The charge only changes how the
-   spin *feels*; it never changes the odds.
+2. Spin, either way you like:
+   - Press and **hold** the gold hub in the middle. The ring around it fills as
+     the spin loads and the wheel winds back like a slingshot; let go and it
+     fires. The longer you hold, the more revolutions and the faster it goes —
+     a quick tap still spins, just weakly.
+   - Or grab the wheel itself and **flick** it. It follows your finger, and the
+     speed you let go at sets the spin, same as the length of a hold. Let go
+     without a flick and the wheel just stays where you put it — nothing is
+     landed, so a stray touch mid-set is harmless. It won't turn backwards:
+     drag against it and it gives a little, then blocks.
+
+   Either way, the gesture only changes how the spin *feels*. It never changes
+   the odds.
 3. Whatever it lands on is the next song to mash into the coda — its title
    pops up on screen and drops into the setlist on the right.
 4. Play it in over the outro, then spin again for the next one. Each landed
@@ -82,16 +90,35 @@ This repo is set up to serve straight from the root of the default branch:
 5. After a minute or two the site is live at
    `https://<user>.github.io/hey-jude-roulette/`.
 
-No framework, bundler, or CI is required — GitHub Pages serves the static
+No framework or bundler is required — GitHub Pages serves the static
 `index.html` as-is.
+
+## Tests
+
+The spin gestures are covered by browser tests that drive the real page in
+Chromium. They run on every pull request, and locally with:
+
+```sh
+npm install
+npx playwright install chromium
+npm test
+```
+
+`npm test` serves the repo on an ephemeral port and runs each suite against it —
+`tests/hub.test.mjs` for the hold gesture and `tests/wheel.test.mjs` for the
+flick. Pass a name to run just one: `npm test wheel`.
+
+These are the only dependencies in the repo, and they are test-only: `index.html`
+itself still ships with nothing.
 
 ## Tech notes
 
 - Single `index.html`: HTML, CSS, and vanilla JS, no external requests.
 - The wheel is drawn as SVG and animated with a CSS `transform` transition
   written from JS: the duration and the number of revolutions both scale with
-  how long you held the hub, so a tap and a full charge are visibly different
-  spins.
+  the strength of the gesture, so a tap and a full charge are visibly different
+  spins. Hold length and flick speed feed the same curve, so both gestures
+  produce the same family of spins.
 - Respects `prefers-reduced-motion` (no wind-up, and one short single-turn
   spin).
 - Best score persists via `localStorage` (and the Claude Artifacts
