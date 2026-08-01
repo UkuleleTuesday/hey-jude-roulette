@@ -763,7 +763,7 @@ function land(i){
   const w=wedges[i];
   spinning=false;
   won.push({title:w.title,artist:w.artist,over:w.over});
-  statusEl.textContent=(w.over?"Loser by Beck. That's the last one in. ":"Into the coda: ")+w.title+" by "+w.artist;
+  statusEl.textContent=w.title+" by "+w.artist;
   popup(w);
   if(w.over){refresh();return later(gameOver,2700);}
   w.consumed=true;
