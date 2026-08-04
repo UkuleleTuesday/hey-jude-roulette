@@ -28,8 +28,13 @@
     padding:clamp(8px,1.6vh,18px) clamp(12px,2vw,22px) clamp(8px,1.6vh,16px);
     -webkit-font-smoothing:antialiased;
   }
+  /* The wheel is a circle, so past a point it stops being able to spend width —
+     it can never be taller than the screen. So the bill is capped at what the
+     wheel can actually use (about a screen height) plus the setlist beside it,
+     and centred: on a wide projector that hands the wheel every pixel it can
+     take and keeps the rest as an even margin rather than a hole on one side. */
   .bill{
-    flex:1;min-height:0;width:100%;max-width:1180px;margin:0 auto;
+    flex:1;min-height:0;width:100%;max-width:calc(96vh + 500px);margin:0 auto;
     display:flex;flex-direction:column;
   }
 
@@ -55,7 +60,9 @@
 
   .table{
     flex:1;min-height:0;display:grid;
-    grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);
+    /* The setlist takes a fixed slice and the wheel takes the rest — the wheel
+       is the thing the room reads from the back of the pub. */
+    grid-template-columns:minmax(0,1fr) clamp(250px,22vw,420px);
     gap:clamp(20px,3vw,44px);align-items:stretch;
   }
   @media (max-width:900px),(orientation:portrait){
@@ -73,14 +80,33 @@
     font-size:clamp(15px,2.5vh,30px);color:var(--cream);
   }
   .coda-line b{font-weight:900;color:var(--gold);}
+  /* The wheel gets everything the stage column has left over once the coda line
+     is placed — the slot is the leftover box, and the wheel is the largest
+     circle that fits inside it. */
+  .wheel-slot{
+    flex:1;min-height:0;width:100%;
+    display:flex;align-items:center;justify-content:center;
+  }
   .wheel-wrap{
     position:relative;aspect-ratio:1;
-    width:min(100%,66vh);max-width:100%;
+    /* Fallback for browsers without container query units: a fixed slice of the
+       viewport, deliberately conservative so it can't overflow. */
+    width:min(100%,72vh);max-width:100%;
+    container-type:inline-size;
     /* The wheel is draggable, so the browser must not claim the gesture as a
        page pan, and a drag must not select the wedge labels. */
     touch-action:none;user-select:none;-webkit-user-select:none;
   }
   .wheel-wrap.dragging,.wheel-wrap.dragging #wheel{cursor:grabbing;}
+  /* Landscape only. Sizing the slot as a container needs a definite height in
+     both axes; in the stacked layout below the stage row is content-sized, and
+     size containment there would collapse the wheel to nothing. */
+  @media (min-width:901px) and (orientation:landscape){
+    @supports (width:1cqh){
+      .wheel-slot{container-type:size;}
+      .wheel-wrap{width:min(100cqw,100cqh);}
+    }
+  }
   @media (max-width:900px),(orientation:portrait){
     .wheel-wrap{width:min(100%,46vh);}
   }
@@ -97,7 +123,12 @@
     background:var(--gold);color:var(--ink);
     border:1px solid rgba(8,22,27,.35);cursor:pointer;
     font-family:var(--display);font-weight:900;
-    font-size:clamp(13px,2.3vw,19px);letter-spacing:.06em;text-transform:uppercase;
+    /* Sized off the wheel, not the viewport: the hub is a fixed fraction of it,
+       so the label has to grow with it or it rattles around inside. Each of
+       these pairs keeps a viewport-based line ahead of the container-based one,
+       so a browser without container query units still gets a sized label. */
+    font-size:clamp(13px,2.3vw,19px);
+    font-size:clamp(13px,4.4cqw,40px);letter-spacing:.06em;text-transform:uppercase;
     transition:background .18s ease,transform .18s ease;z-index:4;
     touch-action:none;user-select:none;-webkit-user-select:none;
   }
@@ -125,7 +156,8 @@
      being the spin control — the next spin simply starts a fresh set. */
   .hub[data-mode=locked]{
     background:#3b5560;border-color:rgba(233,180,76,.4);
-    font-size:clamp(9px,1.5vw,13px);letter-spacing:.03em;
+    font-size:clamp(9px,1.5vw,13px);
+    font-size:clamp(9px,2.9cqw,26px);letter-spacing:.03em;
     color:rgba(243,234,222,.4);cursor:default;
   }
   .hub[data-mode=locked] .fill{opacity:1;background:conic-gradient(rgba(243,234,222,.09) calc(var(--p,0) * 1%),transparent 0);}
@@ -134,14 +166,20 @@
     position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
     z-index:6;pointer-events:none;text-align:center;width:76%;
     background:rgba(8,22,27,.95);border:1px solid var(--gold-dim);
-    padding:20px 22px 22px;animation:popfade 2.7s ease forwards;
+    padding:20px 22px 22px;
+    padding:clamp(16px,3cqw,30px) clamp(18px,3.4cqw,34px);
+    animation:popfade 2.7s ease forwards;
   }
   .popup .song{
     font-family:var(--display);font-weight:900;
-    font-size:clamp(21px,4.4vw,38px);line-height:1;letter-spacing:-.02em;
+    font-size:clamp(21px,4.4vw,38px);
+    font-size:clamp(21px,6.4cqw,56px);line-height:1;letter-spacing:-.02em;
     text-transform:uppercase;margin:0;color:var(--cream);
   }
-  .popup .by{font-size:12px;color:var(--muted);margin:9px 0 0;letter-spacing:.04em;}
+  .popup .by{
+    font-size:12px;font-size:clamp(12px,2cqw,18px);
+    color:var(--muted);margin:9px 0 0;letter-spacing:.04em;
+  }
   @keyframes popfade{
     0%{opacity:0;transform:translate(-50%,-50%) scale(.94);}
     9%{opacity:1;transform:translate(-50%,-50%) scale(1);}
@@ -276,15 +314,17 @@
   <div class="table">
     <section class="stage">
       <p class="coda-line"><b>(F)</b>Na na na <b>(Eb)</b>na-na-na na <b>(Bb)</b>na-na-na na hey Ju<b>(F)</b>de</p>
-      <div class="wheel-wrap" id="wrap">
-        <svg viewBox="0 0 600 600" role="img" aria-label="Wheel of remaining songs">
-          <circle cx="300" cy="300" r="291" fill="none" stroke="#08161b" stroke-width="12"/>
-          <circle cx="300" cy="300" r="285.5" fill="#0d242c" stroke="#a67c2c" stroke-width="1"/>
-          <g id="wheel"></g>
-          <circle cx="300" cy="300" r="86" fill="#0d242c" stroke="#a67c2c" stroke-width="1"/>
-          <polygon points="300,54 288,20 312,20" fill="#e9b44c" stroke="#08161b" stroke-width="1.5"/>
-        </svg>
-        <button class="hub" id="spin" data-mode="spin" aria-disabled="false"><span class="fill" aria-hidden="true"></span><span class="lab">Spin</span></button>
+      <div class="wheel-slot">
+        <div class="wheel-wrap" id="wrap">
+          <svg viewBox="0 0 600 600" role="img" aria-label="Wheel of remaining songs">
+            <circle cx="300" cy="300" r="291" fill="none" stroke="#08161b" stroke-width="12"/>
+            <circle cx="300" cy="300" r="285.5" fill="#0d242c" stroke="#a67c2c" stroke-width="1"/>
+            <g id="wheel"></g>
+            <circle cx="300" cy="300" r="86" fill="#0d242c" stroke="#a67c2c" stroke-width="1"/>
+            <polygon points="300,54 288,20 312,20" fill="#e9b44c" stroke="#08161b" stroke-width="1.5"/>
+          </svg>
+          <button class="hub" id="spin" data-mode="spin" aria-disabled="false"><span class="fill" aria-hidden="true"></span><span class="lab">Spin</span></button>
+        </div>
       </div>
       <p class="status" id="status" role="status" aria-live="polite"></p>
     </section>
